@@ -1,0 +1,58 @@
+.skipLink { position: fixed; z-index: 1000; top: .75rem; inset-inline-start: .75rem; padding: .6rem .9rem; border-radius: .7rem; background: var(--burgundy); color: var(--cream); transform: translateY(-180%); }
+.skipLink:focus { transform: translateY(0); }
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 82px;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: .7rem;
+  color: var(--burgundy);
+  line-height: 1.05;
+}
+
+.brand strong,
+.brand small { display: block; }
+.brand strong { font-size: 1.35rem; font-weight: 800; }
+.brand small { margin-top: .18rem; color: var(--ink-soft); font-size: .78rem; }
+
+.mark {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--gold-ink) 38%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--butter) 20%, var(--cream));
+  color: var(--burgundy);
+}
+
+.navigation { display: flex; align-items: center; gap: .7rem; }
+.navigation a { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; padding: 0 .9rem; border-radius: 999px; color: var(--ink-soft); font-size: .92rem; font-weight: 600; transition: background 180ms ease, color 180ms ease; }
+.navigation a:hover,
+.navigation a.active { background: var(--paper); color: var(--burgundy); }
+.navigation .cartLink { position: relative; gap: .38rem; border: 1px solid var(--line); background: var(--surface-card); color: var(--burgundy); }
+.cartCount { display: grid; min-width: 20px; height: 20px; place-items: center; padding-inline: .25rem; border-radius: 999px; background: var(--burgundy); color: var(--cream); font-size: .69rem; font-weight: 750; font-variant-numeric: tabular-nums; }
+.navigation .buildLink { background: var(--butter); color: var(--burgundy); }
+.navigation .buildLink:hover,
+.navigation .activeBuild { background: var(--burgundy); color: var(--cream); }
+.navigation .accountLink { gap: .4rem; padding-inline: .75rem; color: var(--burgundy); }
+.navigation .accountLink.active { background: var(--gold-wash); color: var(--burgundy); }
+
+@media (max-width: 560px) {
+  .header { min-height: 72px; }
+  .brand { gap: .45rem; }
+  .brand strong { font-size: 1.15rem; }
+  .mark { width: 36px; height: 36px; }
+  .navigation { gap: .25rem; }
+  .navigation > a:nth-child(2) { display: none; }
+  .navigation a { min-height: 42px; padding-inline: .65rem; font-size: .82rem; }
+  .navigation .cartLink { padding-inline: .55rem; }
+  .navigation .cartLink > span:first-of-type { display: none; }
+  .cartCount { position: absolute; top: -4px; inset-inline-start: -4px; min-width: 17px; height: 17px; font-size: .62rem; }
+}

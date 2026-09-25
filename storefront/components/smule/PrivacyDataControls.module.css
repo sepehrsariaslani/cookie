@@ -1,0 +1,24 @@
+.panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  margin-top: 1rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid color-mix(in srgb, #9a2940 24%, transparent);
+  border-radius: 1rem;
+  background: color-mix(in srgb, #9a2940 5%, white);
+}
+
+.panel h2 { margin: 0; color: var(--burgundy); font-size: 1.05rem; }
+.panel p { margin: .25rem 0 0; color: var(--ink-soft); font-size: .88rem; line-height: 1.7; }
+.panel .status { color: #285e43; font-weight: 650; }
+.panel button { flex: 0 0 auto; min-height: 44px; padding-inline: 1rem; border: 1px solid #8c1830; border-radius: 999px; background: white; color: #74152a; font: inherit; font-size: .86rem; font-weight: 700; cursor: pointer; }
+.panel button:hover { background: #8c1830; color: white; }
+.panel button:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+.panel button:disabled { opacity: .55; cursor: wait; }
+
+@media (max-width: 640px) {
+  .panel { align-items: stretch; flex-direction: column; }
+  .panel button { width: 100%; }
+}

@@ -1,0 +1,135 @@
+"use client";
+
+/* eslint-disable @next/next/no-html-link-for-pages -- Native anchors avoid unreliable Vinext client transitions. */
+
+import { ArrowLeft, Minus, Plus, ShoppingBasket, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useCookieCart } from "@/components/smule/CartProvider";
+import { useStorefrontData } from "@/components/smule/StorefrontDataProvider";
+import { smuleAsset } from "@/lib/smule/assets";
+import { CommerceFooter } from "./CommerceFooter";
+import { CommerceHeader } from "./CommerceHeader";
+import { DOUGHS, getToppingCapacity, getToppingName, MAX_TOPPING_COUNT } from "@/lib/smule/cookie-builder";
+import { formatPersianNumber, formatToman, getSmuleProduct } from "@/lib/smule/products";
+import styles from "./CartPage.module.css";
+
+export function CartPage() {
+  const { items, ready, itemCount, setQuantity, removeCookie } = useCookieCart();
+  const { products, connected } = useStorefrontData();
+  const customItems = items.filter((item) => item.kind === "custom");
+  const readySubtotal = items.reduce((total, item) => {
+    if (item.kind !== "product") return total;
+    return total + (getSmuleProduct(item.productSlug, products)?.price ?? 0) * item.quantity;
+  }, 0);
+  const totalWeight = customItems.reduce((total, item) => total + item.nutrition.weight * item.quantity, 0);
+  const totalCalories = customItems.reduce((total, item) => total + item.nutrition.calories * item.quantity, 0);
+
+  return (
+    <div className={`${styles.page} commerce-page`}>
+      <div className={styles.shell}>
+        <CommerceHeader current="cart" />
+        <main id="main-content">
+          <div className={styles.heading}>
+            <div>
+              <p className={styles.eyebrow}><ShoppingBasket size={16} aria-hidden="true" /> سبد خرید اسموله</p>
+              <h1>انتخاب‌هایت اینجاست.</h1>
+              <p>طعم‌های آماده و ترکیب‌های اختصاصی را کنار هم مرور کن.</p>
+            </div>
+            <a href="/menu" className={styles.backLink}>بازگشت به منو <ArrowLeft size={16} aria-hidden="true" /></a>
+          </div>
+
+          {!ready ? (
+            <div className={styles.emptyState} aria-busy="true">سبد را آماده می‌کنیم…</div>
+          ) : items.length === 0 ? (
+            <section className={styles.emptyState}>
+              <span className={styles.emptyIcon}><ShoppingBasket size={25} aria-hidden="true" /></span>
+              <h2>سبدت هنوز خالی است</h2>
+              <p>از منو کوکی آماده بردار یا کوکی مخصوص خودت را بساز؛ هر دو در همین سبد جمع می‌شوند.</p>
+              <div className={styles.emptyActions}>
+                <Button asChild className={styles.primaryButton}><a href="/menu">دیدن منو</a></Button>
+                <Button asChild variant="outline" className={styles.secondaryButton}><a href="/build-cookie">ساخت کوکی دلخواه</a></Button>
+              </div>
+            </section>
+          ) : (
+            <div className={styles.cartLayout}>
+              <section className={styles.lines} aria-label="محصولات انتخاب‌شده">
+                {items.map((item) => {
+                  if (item.kind === "product") {
+                    const product = getSmuleProduct(item.productSlug, products);
+                    if (!product) return <article className={styles.line} key={item.id}><div className={styles.lineDetails}><div className={styles.lineTitleRow}><div><h2>این محصول دیگر در منوی فعال نیست</h2><p>قیمت و موجودی آن در ERPNext پیدا نشد؛ پیش از ثبت درخواست آن را از سبد بردار.</p></div><Button className={styles.removeButton} variant="ghost" size="icon" onClick={() => removeCookie(item.id)} aria-label="حذف محصول ناموجود از سبد"><Trash2 size={18} aria-hidden="true" /></Button></div></div></article>;
+                    return (
+                      <article className={styles.line} key={item.id}>
+                        <a className={styles.cookieMark} href={`/menu/product?slug=${encodeURIComponent(product.slug)}`} aria-label={`جزئیات ${product.name}`}>
+                          <img src={product.image} alt="" style={{ filter: product.imageFilter }} />
+                        </a>
+                        <div className={styles.lineDetails}>
+                          <div className={styles.lineTitleRow}>
+                            <div><span className={styles.lineEyebrow}>کوکی آماده · {product.serving}</span><h2>{product.name}</h2></div>
+                            <Button className={styles.removeButton} variant="ghost" size="icon" onClick={() => removeCookie(item.id)} aria-label={`حذف ${product.name} از سبد`}><Trash2 size={18} aria-hidden="true" /></Button>
+                          </div>
+                          <p className={styles.ingredients}><strong>ترکیبات:</strong> {product.ingredients.join("، ")}</p>
+                          <div className={styles.lineMeta}>
+                            <strong className={styles.linePrice}>{formatToman(item.unitPrice * item.quantity)}</strong>
+                            <div className={styles.quantity} aria-label={`تعداد ${product.name}`}>
+                              <button type="button" disabled={item.quantity <= 1} onClick={() => setQuantity(item.id, item.quantity - 1)} aria-label="کم‌کردن تعداد"><Minus size={15} aria-hidden="true" /></button>
+                              <strong aria-live="polite">{formatPersianNumber(item.quantity)}</strong>
+                              <button type="button" onClick={() => setQuantity(item.id, item.quantity + 1)} aria-label="زیادکردن تعداد"><Plus size={15} aria-hidden="true" /></button>
+                            </div>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  }
+
+                  const dough = DOUGHS.find((option) => option.id === item.doughId) ?? DOUGHS[0];
+                  const names = item.toppingIds.map(getToppingName);
+                  const overCapacity = item.toppingIds.length > MAX_TOPPING_COUNT || item.nutrition.toppingWeight > getToppingCapacity(item.sizeGrams);
+                  return (
+                    <article className={styles.line} key={item.id}>
+                      <div className={styles.cookieMark} aria-hidden="true">
+                        <img src={smuleAsset(item.doughId === "cocoa" ? "/images/smule-cookie-chocolate.png" : "/images/smule-cookie-marble-walnut.png")} alt="" />
+                      </div>
+                      <div className={styles.lineDetails}>
+                        <div className={styles.lineTitleRow}>
+                          <div><span className={styles.lineEyebrow}>کوکی سفارشی · بیس {formatPersianNumber(item.sizeGrams)} گرم · وزن نهایی حدود {formatPersianNumber(item.nutrition.weight)} گرم</span><h2>{dough.name}</h2></div>
+                          <Button className={styles.removeButton} variant="ghost" size="icon" onClick={() => removeCookie(item.id)} aria-label="حذف این کوکی از سبد"><Trash2 size={18} aria-hidden="true" /></Button>
+                        </div>
+                        <p className={styles.weightBreakdown}>خمیر {formatPersianNumber(item.nutrition.doughWeight)} گرم + افزودنی‌ها {formatPersianNumber(item.nutrition.toppingWeight)} گرم</p>
+                        {overCapacity && <p className={styles.capacityWarning}>این دستور از سقف فعلی سازنده بیشتر است؛ انتخاب ذخیره‌شده را نگه داشته‌ایم. ترکیب تازه را می‌توانی دوباره از سازنده تنظیم کنی.</p>}
+                        <p className={styles.ingredients}><strong>ترکیب:</strong> {names.length ? names.join("، ") : "بدون تاپینگ"}</p>
+                        <div className={styles.lineMeta}>
+                          <span>حدود {formatPersianNumber(item.nutrition.calories)} کیلوکالری برای هر کوکی</span>
+                          <div className={styles.quantity} aria-label="تعداد کوکی از این ترکیب">
+                            <button type="button" disabled={item.quantity <= 1} onClick={() => setQuantity(item.id, item.quantity - 1)} aria-label="کم‌کردن تعداد"><Minus size={15} aria-hidden="true" /></button>
+                            <strong aria-live="polite">{formatPersianNumber(item.quantity)}</strong>
+                            <button type="button" onClick={() => setQuantity(item.id, item.quantity + 1)} aria-label="زیادکردن تعداد"><Plus size={15} aria-hidden="true" /></button>
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </section>
+
+              <aside className={styles.summary} aria-label="خلاصهٔ سبد">
+                <h2>خلاصهٔ خرید</h2>
+                <dl>
+                  <div><dt>تعداد کل</dt><dd>{formatPersianNumber(itemCount)} عدد</dd></div>
+                  <div><dt>کوکی‌های آماده</dt><dd>{formatToman(readySubtotal)}</dd></div>
+                  {customItems.length > 0 && <div><dt>کوکی‌های سفارشی</dt><dd>پس از تأیید قیمت‌گذاری می‌شوند</dd></div>}
+                  {totalWeight > 0 && <div><dt>وزن سفارشی تقریبی</dt><dd>{formatPersianNumber(totalWeight)} گرم</dd></div>}
+                  {totalCalories > 0 && <div><dt>کالری سفارشی تقریبی</dt><dd>{formatPersianNumber(totalCalories)} kcal</dd></div>}
+                </dl>
+                <p className={styles.priceNotice}>{customItems.length ? "قیمت نهایی کوکی سفارشی پس از بررسی ترکیب توسط اسموله اعلام می‌شود." : connected ? "قیمت‌های قابل سفارش از Item Price فعال در ERPNext خوانده می‌شوند؛ هزینهٔ ارسال جداگانه هماهنگ می‌شود." : "اتصال ERPNext در دسترس نیست؛ قیمت‌های نمایشی صرفاً نمونه‌اند و سفارش ثبت نمی‌شود."}</p>
+                <a className={styles.continueButton} href="/checkout">ادامه و ثبت اطلاعات <ArrowLeft size={17} aria-hidden="true" /></a>
+                <a className={styles.buildMoreLink} href="/build-cookie">یا ساخت یک کوکی دلخواه</a>
+                <p className={styles.localNotice}>سبد روی همین مرورگر می‌ماند. اطلاعات سفارش و ارسال در مرحلهٔ بعد مرور می‌شود.</p>
+              </aside>
+            </div>
+          )}
+        </main>
+      </div>
+      <CommerceFooter />
+    </div>
+  );
+}

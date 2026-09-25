@@ -1,0 +1,25 @@
+# Python / Frappe local artifacts
+**/__pycache__/
+*.py[cod]
+**/.DS_Store
+**/.ruff_cache/
+**/.pytest_cache/
+
+# Local credentials and environment files
+**/.env
+**/.env.*
+**/*.pem
+**/.dev.vars
+
+# Local Vite metadata
+smule_store/public/site/.vite/
+
+# Frontend dependencies and generated build/runtime state
+storefront/node_modules/
+storefront/.next/
+storefront/.vinext/
+storefront/dist/
+storefront/.wrangler/
+storefront/.sites-runtime/
+storefront/outputs/
+storefront/work/

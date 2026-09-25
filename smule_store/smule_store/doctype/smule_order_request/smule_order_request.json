@@ -1,0 +1,34 @@
+{
+    "doctype": "DocType",
+    "name": "Smule Order Request",
+    "module": "Smule Store",
+    "autoname": "naming_series:",
+    "naming_rule": "By fieldname",
+    "fields": [
+        {"fieldname": "naming_series", "fieldtype": "Select", "label": "سری", "options": "SM-ORD-.YYYY.-.#####", "default": "SM-ORD-.YYYY.-.#####", "reqd": 1, "hidden": 1},
+        {"fieldname": "status", "fieldtype": "Select", "label": "وضعیت درخواست", "options": "جدید\nنیازمند قیمت‌گذاری\nقیمت‌گذاری‌شده\nتبدیل به سفارش فروش\nردشده", "default": "جدید", "in_list_view": 1, "read_only": 1},
+        {"fieldname": "customer_section", "fieldtype": "Section Break", "label": "مشتری"},
+        {"fieldname": "customer_name", "fieldtype": "Data", "label": "نام مشتری", "reqd": 1, "in_list_view": 1},
+        {"fieldname": "phone", "fieldtype": "Data", "label": "شمارهٔ تماس", "reqd": 1, "in_list_view": 1},
+        {"fieldname": "customer", "fieldtype": "Link", "label": "پروندهٔ مشتری", "options": "Customer", "in_list_view": 1},
+        {"fieldname": "delivery_method", "fieldtype": "Select", "label": "روش دریافت", "options": "تحویل حضوری\nارسال", "reqd": 1},
+        {"fieldname": "delivery_address", "fieldtype": "Small Text", "label": "شهر و نشانی", "depends_on": "eval:doc.delivery_method=='ارسال'"},
+        {"fieldname": "customer_note", "fieldtype": "Small Text", "label": "توضیحات مشتری"},
+        {"fieldname": "items_section", "fieldtype": "Section Break", "label": "اقلام"},
+        {"fieldname": "items", "fieldtype": "Table", "label": "اقلام درخواست", "options": "Smule Order Request Item", "reqd": 1},
+        {"fieldname": "currency", "fieldtype": "Link", "label": "ارز", "options": "Currency", "read_only": 1},
+        {"fieldname": "ready_subtotal", "fieldtype": "Currency", "label": "جمع اقلام قیمت‌دار", "options": "currency", "read_only": 1, "in_list_view": 1},
+        {"fieldname": "sales_order", "fieldtype": "Link", "label": "سفارش فروش ERPNext", "options": "Sales Order", "read_only": 1},
+        {"fieldname": "internal_note", "fieldtype": "Small Text", "label": "یادداشت داخلی"}
+    ],
+    "field_order": ["naming_series", "status", "customer_section", "customer_name", "phone", "customer", "delivery_method", "delivery_address", "customer_note", "items_section", "items", "currency", "ready_subtotal", "sales_order", "internal_note"],
+    "permissions": [
+        {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1, "export": 1, "print": 1},
+        {"role": "Sales Manager", "read": 1, "write": 1, "create": 1, "export": 1, "print": 1},
+        {"role": "Sales User", "read": 1, "write": 1, "create": 1}
+    ],
+    "sort_field": "creation",
+    "sort_order": "DESC",
+    "track_changes": 1,
+    "engine": "InnoDB"
+}
