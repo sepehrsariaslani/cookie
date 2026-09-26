@@ -109,6 +109,16 @@ export function getSmuleProduct(slug: string, products: SmuleProduct[] = SMULE_P
   return products.find((product) => product.slug === slug);
 }
 
+export function isProductOrderable(product: SmuleProduct | undefined, ordersEnabled: boolean) {
+  return Boolean(
+    ordersEnabled
+      && product
+      && !product.isSample
+      && Number.isFinite(product.price)
+      && product.price > 0,
+  );
+}
+
 export function formatPersianNumber(value: number) {
   return new Intl.NumberFormat("fa-IR").format(value);
 }

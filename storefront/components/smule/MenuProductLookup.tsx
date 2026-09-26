@@ -23,13 +23,13 @@ function getProductSlug() {
 }
 
 export function MenuProductLookup() {
-  const { products, loading, connected } = useStorefrontData();
+  const { products, loading, connected, ordersEnabled } = useStorefrontData();
   const slug = useSyncExternalStore(subscribeToLocation, getProductSlug, () => "");
 
   const product: SmuleProduct | undefined = getSmuleProduct(slug, products)
     ?? (!connected ? getSmuleProduct(slug, SMULE_PRODUCTS) : undefined);
 
-  if (product) return <ProductDetail product={product} />;
+  if (product) return <ProductDetail product={product} ordersEnabled={ordersEnabled} />;
   if (loading || !slug) return <div className={styles.loading} role="status">در حال دریافت جزئیات از منوی اسموله…</div>;
   return <NotFoundPage />;
 }

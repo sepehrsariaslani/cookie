@@ -37,7 +37,7 @@ import styles from "./CookieBuilder.module.css";
 
 export function CookieBuilder() {
   const { addCookie, itemCount, ready } = useCookieCart();
-  const { components, connected, currency, pricingMarkupPercent, customCookieFixedCost, priceRoundingIncrement } = useStorefrontData();
+  const { components, connected, ordersEnabled, currency, pricingMarkupPercent, customCookieFixedCost, priceRoundingIncrement } = useStorefrontData();
   const [dough, setDough] = useState<DoughId>("marble");
   const [sizeGrams, setSizeGrams] = useState(50);
   const [toppings, setToppings] = useState<ToppingId[]>([]);
@@ -220,8 +220,8 @@ export function CookieBuilder() {
             <p className={styles.estimateDisclaimer}>کالری و مقدار مواد تخمینی‌اند و با دستور واقعی، وزن‌کشی و پخت تغییر می‌کنند. تخم‌مرغ جزو بعضی خمیرهاست، نه تاپینگ.</p>
 
             <div className={styles.formActions}>
-              <Button className={styles.buildButton} type="button" onClick={buildAndAddCookie} disabled={!ready || cookiePrice === null}>
-                <ShoppingBasket size={18} aria-hidden="true" /> {!ready ? "در حال آماده‌سازی سبد…" : cookiePrice === null ? "قیمت این ترکیب هنوز آماده نیست" : "این کوکی را بساز و به سبد ببر"}
+              <Button className={styles.buildButton} type="button" onClick={buildAndAddCookie} disabled={!ready || !ordersEnabled || cookiePrice === null}>
+                <ShoppingBasket size={18} aria-hidden="true" /> {!ready ? "در حال آماده‌سازی سبد…" : !ordersEnabled ? "پذیرش سفارش فعلاً غیرفعال است" : cookiePrice === null ? "قیمت این ترکیب هنوز آماده نیست" : "این کوکی را بساز و به سبد ببر"}
               </Button>
               <Button className={styles.resetButton} variant="ghost" type="button" onClick={resetBuilder}>از نو</Button>
             </div>

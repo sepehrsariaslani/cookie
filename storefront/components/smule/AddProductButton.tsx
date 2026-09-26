@@ -3,13 +3,16 @@
 import { Check, ShoppingBasket } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useCookieCart } from "@/components/smule/CartProvider";
+import { useStorefrontData } from "@/components/smule/StorefrontDataProvider";
 import type { SmuleProduct } from "@/lib/smule/products";
+import { isProductOrderable } from "@/lib/smule/products";
 import styles from "./AddProductButton.module.css";
 
 export function AddProductButton({ product, className }: { product: SmuleProduct; className?: string }) {
   const { addProduct, ready } = useCookieCart();
+  const { ordersEnabled } = useStorefrontData();
   const [added, setAdded] = useState(false);
-  const unavailable = Boolean(product.isSample);
+  const canOrder = isProductOrderable(product, ordersEnabled);
 
   useEffect(() => {
     if (!added) return;
@@ -21,7 +24,7 @@ export function AddProductButton({ product, className }: { product: SmuleProduct
     <button
       type="button"
       className={`${styles.button} ${className ?? ""}`.trim()}
-      disabled={!ready || unavailable}
+      disabled={!ready || !canOrder}
       onClick={() => {
         addProduct(product.slug, product.price);
         setAdded(true);
@@ -29,7 +32,7 @@ export function AddProductButton({ product, className }: { product: SmuleProduct
       aria-live="polite"
     >
       {added ? <Check size={17} aria-hidden="true" /> : <ShoppingBasket size={17} aria-hidden="true" />}
-      {unavailable ? "نمونه · سفارش فعال نیست" : !ready ? "در حال آماده‌سازی…" : added ? "به سبد اضافه شد" : "افزودن به سبد"}
+      {!ready ? "در حال آماده‌سازی…" : product.isSample ? "نمونه · سفارش فعال نیست" : !canOrder ? "پذیرش سفارش فعلاً غیرفعال است" : added ? "به سبد اضافه شد" : "افزودن به سبد"}
     </button>
   );
 }

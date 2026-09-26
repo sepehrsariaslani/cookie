@@ -2,7 +2,7 @@
 
 import { ArrowLeft, Check, ChevronRight, Flame, Info } from "lucide-react";
 import type { SmuleProduct } from "@/lib/smule/products";
-import { formatPersianNumber } from "@/lib/smule/products";
+import { formatPersianNumber, isProductOrderable } from "@/lib/smule/products";
 import { CommerceHeader } from "./CommerceHeader";
 import { CommerceFooter } from "./CommerceFooter";
 import { ProductHero } from "./ProductHero";
@@ -16,8 +16,9 @@ const macroLabels = [
   ["sugar", "قند", "g"],
 ] as const;
 
-export function ProductDetail({ product }: { product: SmuleProduct }) {
+export function ProductDetail({ product, ordersEnabled = false }: { product: SmuleProduct; ordersEnabled?: boolean }) {
   const hasNutrition = Object.values(product.nutrition).some((value) => value > 0);
+  const canOrder = isProductOrderable(product, ordersEnabled);
   return (
     <div className={`${styles.page} commerce-page`}>
       <div className={styles.shell}>
@@ -106,7 +107,7 @@ export function ProductDetail({ product }: { product: SmuleProduct }) {
 
             <div className={styles.actions}>
               <AddProductButton product={product} />
-              <a className={styles.primaryButton} href="/cart">رفتن به سبد <ArrowLeft size={18} aria-hidden="true" /></a>
+              {canOrder && <a className={styles.primaryButton} href="/cart">رفتن به سبد <ArrowLeft size={18} aria-hidden="true" /></a>}
               <a className={styles.secondaryButton} href="/build-cookie">
                 ترکیب خودم را بساز
               </a>
