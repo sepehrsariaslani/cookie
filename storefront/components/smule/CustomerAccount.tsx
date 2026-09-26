@@ -51,6 +51,10 @@ function getAccountTabFromLocation(): AccountTab {
   return tabs.some(({ id }) => id === requested) ? requested as AccountTab : "overview";
 }
 
+function getOrderSubmissionFromLocation() {
+  return typeof window !== "undefined" && new URLSearchParams(window.location.search).get("submitted") === "1";
+}
+
 function subscribeToAccountTab(onChange: () => void) {
   window.addEventListener("popstate", onChange);
   return () => window.removeEventListener("popstate", onChange);
@@ -189,6 +193,7 @@ function AddressEditor({
 export function CustomerAccount() {
   const [data, setData] = useState<SmuleAccountData | null>(null);
   const tab = useSyncExternalStore(subscribeToAccountTab, getAccountTabFromLocation, () => "overview");
+  const orderWasSubmitted = useSyncExternalStore(subscribeToAccountTab, getOrderSubmissionFromLocation, () => false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -324,7 +329,7 @@ export function CustomerAccount() {
               </section>
 
               {!data.accountReady && <div className={`${styles.setupNotice} ${data.customerSetupReady ? "" : styles.setupNoticeError}`}><ShieldCheck size={18} aria-hidden="true" /><span>{data.customerSetupReady ? "برای ثبت نشانی و پیگیری سفارش‌ها، اطلاعات تماس را یک‌بار ذخیره کن." : "مدیر فروشگاه باید ابتدا گروه مشتری و قلمرو را در ERPNext تنظیم کند؛ بعد از آن می‌توان اطلاعات را ثبت کرد."}</span>{data.customerSetupReady && <button type="button" onClick={() => selectTab("profile")}>تکمیل اطلاعات</button>}</div>}
-              {(error || notice) && <div className={`${styles.feedback} ${error ? styles.feedbackError : styles.feedbackSuccess}`} role={error ? "alert" : "status"}>{error || notice}</div>}
+              {(error || notice || orderWasSubmitted) && <div className={`${styles.feedback} ${error ? styles.feedbackError : styles.feedbackSuccess}`} role={error ? "alert" : "status"}>{error || notice || "درخواست سفارش در ERPNext ثبت شد؛ وضعیت و جزئیات از همین بخش قابل پیگیری است."}</div>}
 
               <div className={styles.dashboardLayout}>
                 <nav className={styles.tabs} role="tablist" aria-label="بخش‌های حساب کاربری">

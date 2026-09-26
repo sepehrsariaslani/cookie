@@ -12,9 +12,8 @@ import { CheckoutScheduleFields, type DeliveryCoordinates } from "@/components/s
 import { DOUGHS } from "@/lib/smule/cookie-builder";
 import { fetchCustomerAccount, type SmuleAccountAddress } from "@/lib/smule/customer-account";
 import { sendOrderRequest } from "@/lib/smule/frappe-client";
-import { buildLocalOrderDraft, getReadySubtotal } from "@/lib/smule/order-draft";
-import { ORDER_DRAFTS_STORAGE_KEY, readOrderDrafts } from "@/lib/smule/orders";
-import { formatPersianNumber, formatToman, getSmuleProduct, toDisplayTomans } from "@/lib/smule/products";
+import { getReadySubtotal } from "@/lib/smule/order-draft";
+import { formatPersianNumber, formatToman, getSmuleProduct } from "@/lib/smule/products";
 import styles from "./CheckoutPage.module.css";
 
 type CheckoutField = "name" | "phone" | "city" | "address" | "requestedForDate";
@@ -29,12 +28,13 @@ function normalizePhoneNumber(value: string) {
 
 export function CheckoutPage() {
   const { items, ready, clearCart } = useCookieCart();
-  const { products, connected, loading, ordersEnabled, deliveryEnabled, pickupAddress, pickupHours, currency } = useStorefrontData();
+  const { products, connected, loading, ordersEnabled, deliveryEnabled, pickupAddress, pickupHours } = useStorefrontData();
   const [message, setMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<CheckoutErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [deliveryMethod, setDeliveryMethod] = useState<"pickup" | "delivery">("pickup");
   const [submittedOrderId, setSubmittedOrderId] = useState("");
+  const [submittedTrackingHref, setSubmittedTrackingHref] = useState("");
   const [customer, setCustomer] = useState({ name: "", phone: "", city: "", address: "", note: "" });
   const [scheduled, setScheduled] = useState(false);
   const [requestedDate, setRequestedDate] = useState("");
@@ -117,20 +117,6 @@ export function CheckoutPage() {
     setSubmitting(true);
     setMessage("");
 
-    const order = buildLocalOrderDraft({
-      items,
-      customer,
-      deliveryMethod: activeDeliveryMethod,
-      requestedForDate: scheduled ? requestedDate : "",
-      requestedForTime: scheduled ? requestedTime : "",
-      products,
-    });
-    if (!order) {
-      setMessage("یکی از اقلام سبد دیگر در منو در دسترس نیست. سبد خرید را بررسی و دوباره تلاش کن.");
-      setSubmitting(false);
-      return;
-    }
-
     let result: Awaited<ReturnType<typeof sendOrderRequest>>;
     try {
       result = await sendOrderRequest({
@@ -159,21 +145,14 @@ export function CheckoutPage() {
       return;
     }
 
-    order.id = result.name;
-    order.erpRequestName = result.name;
-    order.status = "sent-to-frappe";
-    order.readySubtotal = toDisplayTomans(result.readySubtotal, result.currency ?? currency);
-    const drafts = readOrderDrafts();
-    try {
-      localStorage.setItem(ORDER_DRAFTS_STORAGE_KEY, JSON.stringify([order, ...drafts]));
-      clearCart();
-      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- The site uses full document navigation for its static Frappe export.
-      window.location.assign(`/orders/view/?id=${encodeURIComponent(order.id)}`);
-    } catch {
-      setSubmittedOrderId(result.name);
-      setMessage("");
-      setSubmitting(false);
-    }
+    const trackingHref = result.trackingToken
+      ? `/orders/view/#${result.trackingToken}`
+      : "/account?tab=orders&submitted=1";
+    setSubmittedOrderId(result.name);
+    setSubmittedTrackingHref(trackingHref);
+    setMessage("");
+    clearCart();
+    window.location.assign(trackingHref);
   }
 
   return (
@@ -199,7 +178,8 @@ export function CheckoutPage() {
               <ClipboardList size={26} aria-hidden="true" />
               {submittedOrderId ? <>
                 <h2>درخواست در ERPNext ثبت شد</h2>
-                <p>شمارهٔ پیگیری: <strong>{submittedOrderId}</strong>. نسخهٔ محلی جزئیات در مرورگر ذخیره نشد؛ این شماره را نگه دار.</p>
+                <p>شمارهٔ درخواست: <strong>{submittedOrderId}</strong>. اطلاعات شخصی سفارش در مرورگر ذخیره نمی‌شود.</p>
+                {submittedTrackingHref && <a href={submittedTrackingHref}>{submittedTrackingHref.startsWith("/orders/") ? "پیگیری وضعیت درخواست" : "دیدن سفارش‌ها در حساب"} <ArrowLeft size={16} aria-hidden="true" /></a>}
                 <a href="/menu">بازگشت به منو <ArrowLeft size={16} aria-hidden="true" /></a>
               </> : <>
                 <h2>چیزی برای بررسی نیست</h2>

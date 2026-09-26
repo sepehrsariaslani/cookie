@@ -9,11 +9,13 @@ from frappe.utils import add_days, today
 
 from smule_store.api.storefront import _get_prices
 from smule_store.domain.cookie import calculate_custom_cookie
+from smule_store.domain.order_tracking import create_tracking_token, hash_tracking_token
 from smule_store.domain.scheduling import normalize_coordinates, normalize_requested_schedule
 
 MAX_ORDER_LINES = 30
 MAX_ORDER_QUANTITY = 20
 RATE_LIMIT_PER_MINUTE = 8
+GUEST_LOOKUP_RATE_LIMIT_PER_MINUTE = 30
 
 
 def _fail(message):
@@ -45,6 +47,18 @@ def _rate_limit_request():
 	count = int(cache.get_value(key) or 0)
 	if count >= RATE_LIMIT_PER_MINUTE:
 		_fail("درخواست‌های زیادی ثبت شده؛ یک دقیقهٔ دیگر دوباره تلاش کن.")
+	cache.set_value(key, count + 1, expires_in_sec=60)
+
+
+def _rate_limit_guest_lookup():
+	request = getattr(frappe.local, "request", None)
+	remote = request.remote_addr if request else "unknown"
+	digest = hashlib.sha256(remote.encode("utf-8")).hexdigest()[:24]
+	key = f"smule_store:guest_order_lookup:{digest}"
+	cache = frappe.cache()
+	count = int(cache.get_value(key) or 0)
+	if count >= GUEST_LOOKUP_RATE_LIMIT_PER_MINUTE:
+		_fail("درخواست‌های پیگیری زیادی ثبت شده؛ کمی بعد دوباره تلاش کن.")
 	cache.set_value(key, count + 1, expires_in_sec=60)
 
 
@@ -218,6 +232,10 @@ def create_order_request(order=None):
 		from smule_store.api.customer_portal import get_customer_for_current_user
 
 		customer_link = get_customer_for_current_user().name
+	tracking_token = None
+	tracking_token_hash = None
+	if frappe.session.user == "Guest":
+		tracking_token, tracking_token_hash = create_tracking_token()
 
 	lines = payload.get("items")
 	if not isinstance(lines, list) or not lines or len(lines) > MAX_ORDER_LINES:
@@ -267,6 +285,7 @@ def create_order_request(order=None):
 			"requested_for_time": requested_for_time,
 			"delivery_latitude": latitude if delivery == "delivery" else None,
 			"delivery_longitude": longitude if delivery == "delivery" else None,
+			"guest_tracking_token_hash": tracking_token_hash,
 			"customer_note": str(customer_data.get("note", ""))[:2000],
 			"currency": price_currency,
 			"items": request_items,
@@ -279,8 +298,63 @@ def create_order_request(order=None):
 		"readySubtotal": order_doc.ready_subtotal,
 		"currency": order_doc.currency,
 		"paymentRequired": False,
+		"trackingToken": tracking_token,
 		"requestedForDate": order_doc.requested_for_date,
 		"requestedForTime": order_doc.requested_for_time,
+	}
+
+
+@frappe.whitelist(allow_guest=True)
+def get_guest_order_status(token=None):
+	"""Read a minimal order status using a private token; never expose contact or address data."""
+	request = getattr(frappe.local, "request", None)
+	if request and request.method != "POST":
+		_fail("پیگیری سفارش فقط با روش امن POST انجام می‌شود.")
+	_rate_limit_guest_lookup()
+	try:
+		token_hash = hash_tracking_token(token or frappe.form_dict.get("token"))
+	except ValueError:
+		_fail("این پیوند پیگیری معتبر نیست یا دیگر در دسترس نیست.")
+
+	order = frappe.db.get_value(
+		"Smule Order Request",
+		{"guest_tracking_token_hash": token_hash},
+		[
+			"name",
+			"status",
+			"creation",
+			"delivery_method",
+			"requested_for_date",
+			"requested_for_time",
+			"ready_subtotal",
+			"currency",
+		],
+		as_dict=True,
+	)
+	if not order:
+		_fail("این پیوند پیگیری معتبر نیست یا دیگر در دسترس نیست.")
+
+	items = frappe.get_all(
+		"Smule Order Request Item",
+		filters={"parent": order.name, "parenttype": "Smule Order Request"},
+		fields=["title_fa", "qty", "quote_required"],
+		order_by="idx asc",
+		limit_page_length=MAX_ORDER_LINES,
+	)
+	return {
+		"name": order.name,
+		"status": order.status,
+		"createdAt": order.creation,
+		"deliveryMethod": order.delivery_method,
+		"requestedForDate": order.requested_for_date,
+		"requestedForTime": order.requested_for_time,
+		"readySubtotal": order.ready_subtotal,
+		"currency": order.currency,
+		"paymentRequired": False,
+		"items": [
+			{"title": row.title_fa, "quantity": row.qty, "quoteRequired": bool(row.quote_required)}
+			for row in items
+		],
 	}
 
 

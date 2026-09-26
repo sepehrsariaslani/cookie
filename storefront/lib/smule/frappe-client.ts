@@ -15,8 +15,22 @@ export type FrappeOrderResult = {
   readySubtotal: number;
   currency: string | null;
   paymentRequired: false;
+  trackingToken?: string | null;
   requestedForDate?: string | null;
   requestedForTime?: string | null;
+};
+
+export type GuestOrderStatus = {
+  name: string;
+  status: string;
+  createdAt: string;
+  deliveryMethod: string;
+  requestedForDate?: string | null;
+  requestedForTime?: string | null;
+  readySubtotal: number;
+  currency: string | null;
+  paymentRequired: false;
+  items: Array<{ title: string; quantity: number; quoteRequired: boolean }>;
 };
 
 type FrappeEnvelope<T> = { message?: T; _server_messages?: string; exception?: string };
@@ -78,4 +92,23 @@ export async function sendOrderRequest(order: Record<string, unknown>, signal?: 
     signal,
   });
   return readMessage<FrappeOrderResult>(response);
+}
+
+export async function fetchGuestOrderStatus(token: string, signal?: AbortSignal) {
+  const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="frappe-csrf-token"]')?.content;
+  if (!csrfToken) throw new Error("نشست امن پیدا نشد؛ صفحه را تازه‌سازی کن.");
+
+  const response = await fetch("/api/method/smule_store.api.orders.get_guest_order_status", {
+    method: "POST",
+    credentials: "same-origin",
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+      "X-Frappe-CSRF-Token": csrfToken,
+    },
+    body: new URLSearchParams({ token }),
+    signal,
+  });
+  return readMessage<GuestOrderStatus>(response);
 }

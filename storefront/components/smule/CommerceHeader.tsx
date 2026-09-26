@@ -19,7 +19,7 @@ export function CommerceHeader({ current }: { current?: "menu" | "builder" | "ca
       </a>
       <nav className={styles.navigation} aria-label="ناوبری اصلی">
         <a className={current === "menu" ? styles.active : ""} href="/menu">منو</a>
-        <a href="/my-orders">پیش‌نویس</a>
+        <a href="/account?tab=orders">سفارش‌ها</a>
         <a className={`${styles.cartLink} ${current === "cart" ? styles.active : ""}`} href="/cart" aria-label={`سبد خرید، ${formatPersianNumber(itemCount)} عدد`}>
           <ShoppingBasket size={18} aria-hidden="true" />
           <span>سبد</span>

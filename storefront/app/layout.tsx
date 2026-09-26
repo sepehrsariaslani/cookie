@@ -6,6 +6,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "اسموله | منوی کوکی و ترکیب‌های سفارشی",
   description: "طعم‌های آمادهٔ اسموله را ببین یا ترکیب کوکی دلخواهت را با پیش‌نمایش زنده بساز.",
+  referrer: "no-referrer",
   other: {
     "codex-preview": "development",
   },
