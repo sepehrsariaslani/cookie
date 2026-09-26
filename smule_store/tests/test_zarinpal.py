@@ -24,7 +24,7 @@ class FakeResponse:
 class TestZarinPalAdapter(unittest.TestCase):
 	def test_amount_must_be_positive_integer_rial(self):
 		self.assertEqual(normalize_amount_irr("12000"), 12000)
-		for value in (0, -1, "12000.5", "not-money"):
+		for value in (0, -1, 9999, "12000.5", "not-money"):
 			with self.subTest(value=value), self.assertRaises(ZarinPalError):
 				normalize_amount_irr(value)
 
@@ -49,7 +49,7 @@ class TestZarinPalAdapter(unittest.TestCase):
 
 	def test_create_payment_rejects_non_https_callback(self):
 		with self.assertRaises(ZarinPalError):
-			create_payment("merchant", 100, "http://localhost/callback", "Order", post=lambda *_args, **_kwargs: None)
+			create_payment("merchant", 10000, "http://localhost/callback", "Order", post=lambda *_args, **_kwargs: None)
 
 	def test_verification_uses_authoritative_amount_and_accepts_already_verified(self):
 		calls = []
@@ -67,7 +67,7 @@ class TestZarinPalAdapter(unittest.TestCase):
 		with self.assertRaises(ZarinPalError):
 			verify_payment(
 				"merchant",
-				100,
+				10000,
 				"A" * 36,
 				post=lambda *_args, **_kwargs: FakeResponse({"data": {"code": -9}}),
 			)

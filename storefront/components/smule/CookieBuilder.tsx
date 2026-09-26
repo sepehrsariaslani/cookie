@@ -146,7 +146,7 @@ export function CookieBuilder() {
                       <small>{option.note}</small>
                       <span className={styles.baseIngredients}>{option.ingredients.join(" · ")}</span>
                     </span>
-                    <RadioGroupItem className={styles.radio} id={`dough-${option.id}`} value={option.id} />
+                    <RadioGroupItem className={styles.radio} id={`dough-${option.id}`} value={option.id} aria-label={option.name} />
                   </label>
                 ))}
               </RadioGroup>
@@ -193,6 +193,7 @@ export function CookieBuilder() {
                                 id={inputId}
                                 checked={checked}
                                 disabled={blocked}
+                                aria-label={`${option.name}، افزودن به کوکی`}
                                 aria-describedby={blocked ? "topping-capacity-help" : undefined}
                                 onCheckedChange={(value) => toggleTopping(option.id, value === true)}
                               />

@@ -8,6 +8,7 @@ import requests
 
 PRODUCTION_ORIGIN = "https://payment.zarinpal.com"
 SANDBOX_ORIGIN = "https://sandbox.zarinpal.com"
+MIN_AMOUNT_IRR = 10_000
 
 
 class ZarinPalError(ValueError):
@@ -23,8 +24,10 @@ def normalize_amount_irr(value):
 		amount = Decimal(str(value))
 	except (InvalidOperation, TypeError, ValueError):
 		raise ZarinPalError("مبلغ سفارش برای پرداخت معتبر نیست.")
-	if not amount.is_finite() or amount <= 0 or amount != amount.to_integral_value():
-		raise ZarinPalError("مبلغ سفارش باید عدد صحیح و بیشتر از صفر ریال باشد.")
+	if not amount.is_finite() or amount != amount.to_integral_value():
+		raise ZarinPalError("مبلغ سفارش باید عدد صحیح و به ریال باشد.")
+	if amount < MIN_AMOUNT_IRR:
+		raise ZarinPalError("حداقل مبلغ قابل پرداخت در زرین‌پال ۱۰٬۰۰۰ ریال است.")
 	return int(amount)
 
 
