@@ -1,9 +1,12 @@
 import unittest
 
+import requests
+
 from smule_store.domain.zarinpal import (
 	PRODUCTION_ORIGIN,
 	SANDBOX_ORIGIN,
 	ZarinPalError,
+	ZarinPalPendingError,
 	create_payment,
 	normalize_amount_irr,
 	verify_payment,
@@ -71,6 +74,17 @@ class TestZarinPalAdapter(unittest.TestCase):
 				"A" * 36,
 				post=lambda *_args, **_kwargs: FakeResponse({"data": {"code": -9}}),
 			)
+
+	def test_verification_transport_response_does_not_mark_payment_as_failed(self):
+		class UnavailableResponse:
+			def raise_for_status(self):
+				raise requests.HTTPError("gateway unavailable")
+
+			def json(self):
+				return None
+
+		with self.assertRaises(ZarinPalPendingError):
+			verify_payment("merchant", 10000, "A" * 36, post=lambda *_args, **_kwargs: UnavailableResponse())
 
 
 if __name__ == "__main__":

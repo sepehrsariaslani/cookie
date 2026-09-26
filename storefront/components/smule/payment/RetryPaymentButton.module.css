@@ -1,0 +1,14 @@
+.wrapper { display: grid; justify-items: start; gap: .4rem; margin-top: .7rem; }
+.button { display: inline-flex; min-height: 46px; align-items: center; justify-content: center; gap: .45rem; padding: .55rem .95rem; border: 1px solid var(--butter); border-radius: 999px; background: var(--butter); color: var(--burgundy); font: inherit; font-size: .84rem; font-weight: 750; cursor: pointer; transition: background 160ms ease, border-color 160ms ease, opacity 160ms ease; }
+.button:hover { border-color: var(--gold-ink); background: color-mix(in srgb, var(--butter) 84%, white); }
+.button:focus-visible { outline: 3px solid var(--gold-ink); outline-offset: 3px; }
+.button:disabled { opacity: .7; cursor: progress; }
+.spinner { animation: spin 900ms linear infinite; }
+.error { max-width: 34rem; margin: 0; color: #8c1830; font-size: .8rem; font-weight: 650; line-height: 1.6; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .button { transition: none; }
+  .spinner { animation-duration: 2s; }
+}

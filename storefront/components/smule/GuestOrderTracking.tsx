@@ -8,6 +8,7 @@ import { CommerceFooter } from "@/components/smule/CommerceFooter";
 import { CommerceHeader } from "@/components/smule/CommerceHeader";
 import { fetchGuestOrderStatus, type GuestOrderStatus } from "@/lib/smule/frappe-client";
 import { formatPersianNumber, formatToman, toDisplayTomans } from "@/lib/smule/products";
+import { RetryPaymentButton } from "@/components/smule/payment/RetryPaymentButton";
 import styles from "./OrderPages.module.css";
 
 const statusLabels: Record<string, string> = {
@@ -61,6 +62,7 @@ export function GuestOrderTracking({ token }: { token: string }) {
   const currentLookup = lookup?.token === token ? lookup : null;
   const order = currentLookup?.order ?? null;
   const error = currentLookup?.error ?? "";
+  const paymentCanBeRetried = order?.paymentStatus === "ناموفق" || order?.paymentStatus === "لغوشده";
   const content = !order ? (
     <main id="main-content" className={styles.main}>
       {error ? (
@@ -79,7 +81,8 @@ export function GuestOrderTracking({ token }: { token: string }) {
       <h1>وضعیت درخواست <span>{order.name}</span></h1>
       <div className={styles.importantNotice} role="status">
         <strong><Clock3 size={18} aria-hidden="true" /> {order.paymentStatus === "پرداخت‌شده" ? "پرداخت با موفقیت ثبت شد" : order.paymentStatus === "تأییدشده در درگاه؛ نیازمند تطبیق" ? "درگاه پرداخت را تأیید کرده؛ ثبت حسابداری در حال بررسی است" : order.paymentStatus === "ناموفق" ? "پرداخت تأیید نشد" : order.paymentStatus === "لغوشده" ? "پرداخت لغو شد" : order.paymentStatus === "در انتظار پرداخت" ? "وضعیت پرداخت در انتظار تأیید است" : statusLabels[order.status] ?? order.status}</strong>
-        <p>{order.paymentStatus === "پرداخت‌شده" ? "رسید پرداخت در ERPNext ثبت شده است. برای زمان یا جزئیات تحویل، فروشگاه در صورت نیاز با تو هماهنگ می‌کند." : order.paymentStatus === "تأییدشده در درگاه؛ نیازمند تطبیق" ? "وجه در زرین‌پال تأیید شده است، اما ERPNext هنوز سند دریافت را ثبت نکرده؛ پیوند پیگیری را نگه دار و برای هماهنگی با اسموله تماس بگیر." : order.paymentStatus === "ناموفق" || order.paymentStatus === "لغوشده" ? "سفارشت برای پیگیری ثبت است اما پرداخت قطعی نشده؛ پیش از تلاش دوباره با فروشگاه هماهنگ کن." : order.paymentStatus === "در انتظار پرداخت" ? "فروشگاه هنوز پاسخ نهایی زرین‌پال را دریافت نکرده است؛ چند لحظه بعد دوباره وضعیت را بررسی کن." : "این درخواست ثبت شده است؛ وضعیت پرداخت یا تأیید نهایی را همین‌جا دنبال کن."}</p>
+        <p>{order.paymentStatus === "پرداخت‌شده" ? "رسید پرداخت در ERPNext ثبت شده است. برای زمان یا جزئیات تحویل، فروشگاه در صورت نیاز با تو هماهنگ می‌کند." : order.paymentStatus === "تأییدشده در درگاه؛ نیازمند تطبیق" ? "وجه در زرین‌پال تأیید شده است، اما ERPNext هنوز سند دریافت را ثبت نکرده؛ پیوند پیگیری را نگه دار و برای هماهنگی با اسموله تماس بگیر." : paymentCanBeRetried ? "اگر مبلغی از حسابت کسر شده، پرداخت را تکرار نکن و با فروشگاه هماهنگ کن. اگر پرداخت قطعی نشده، می‌توانی از همین‌جا دوباره تلاش کنی." : order.paymentStatus === "در انتظار پرداخت" ? "فروشگاه هنوز پاسخ نهایی زرین‌پال را دریافت نکرده است؛ چند لحظه بعد دوباره وضعیت را بررسی کن." : "این درخواست ثبت شده است؛ وضعیت پرداخت یا تأیید نهایی را همین‌جا دنبال کن."}</p>
+        {paymentCanBeRetried && <RetryPaymentButton trackingToken={token} />}
       </div>
       <section className={styles.orderCard} aria-label="جزئیات عمومی درخواست">
         <h2>اقلام درخواست</h2>

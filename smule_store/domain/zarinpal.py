@@ -97,7 +97,11 @@ def verify_payment(merchant_id, amount_irr, authority, sandbox=False, post=None)
 	except requests.RequestException:
 		raise ZarinPalPendingError("تأیید پرداخت از درگاه دریافت نشد؛ وضعیت سفارش در انتظار بررسی است.")
 
-	payload = _provider_json(response)
+	try:
+		payload = _provider_json(response)
+	except ZarinPalError:
+		# A malformed or non-success HTTP response cannot prove that the charge failed.
+		raise ZarinPalPendingError("پاسخ قطعی تأیید از درگاه دریافت نشد؛ وضعیت سفارش در انتظار بررسی است.")
 	code = payload.get("data", {}).get("code")
 	if code not in (100, 101):
 		raise ZarinPalError("پرداخت در زرین‌پال تأیید نشد.")

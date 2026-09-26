@@ -1,11 +1,14 @@
 """Guest-safe ZarinPal callback with server-side verification and ERPNext posting."""
 
+import hashlib
 import re
 
 import frappe
 from frappe.utils import get_url, today
 
-from smule_store.domain.order_tracking import create_tracking_token
+from smule_store.domain.order_tracking import create_tracking_token, hash_tracking_token
+from smule_store.domain.payment_retry import is_payment_retry_allowed
+from smule_store.domain.payments import create_native_payment_request, get_live_payment_configuration
 from smule_store.domain.zarinpal import (
 	ZarinPalError,
 	ZarinPalPendingError,
@@ -15,6 +18,8 @@ from smule_store.domain.zarinpal import (
 
 
 AUTHORITY_PATTERN = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+PAYMENT_RETRYABLE_STATUSES = {"ناموفق", "لغوشده"}
+PAYMENT_RETRY_PER_MINUTE = 5
 
 
 def _redirect_to_receipt(order_name=None):
@@ -54,6 +59,110 @@ def _existing_payment_entry(payment_request_name):
 		if frappe.db.get_value("Payment Entry", name, "docstatus") == 1:
 			return name
 	return None
+
+
+def _rate_limit_payment_retry():
+	request = getattr(frappe.local, "request", None)
+	remote = request.remote_addr if request else "unknown"
+	digest = hashlib.sha256(remote.encode("utf-8")).hexdigest()[:24]
+	key = f"smule_store:payment_retry:{digest}"
+	cache = frappe.cache()
+	count = int(cache.get_value(key) or 0)
+	if count >= PAYMENT_RETRY_PER_MINUTE:
+		frappe.throw("تلاش‌های پرداخت زیادی انجام شده؛ یک دقیقهٔ دیگر دوباره امتحان کن.", frappe.ValidationError)
+	cache.set_value(key, count + 1, expires_in_sec=60)
+
+
+@frappe.whitelist(allow_guest=True)
+def retry_zarinpal_payment(order_name=None, token=None):
+	"""Create a fresh authority only for a failed/cancelled, still-unpaid ERPNext order."""
+	request = getattr(frappe.local, "request", None)
+	if request and request.method != "POST":
+		frappe.throw("درخواست پرداخت مجدد فقط با روش امن POST پذیرفته می‌شود.", frappe.ValidationError)
+	_rate_limit_payment_retry()
+	form = getattr(frappe, "form_dict", {})
+	private_token = str(token or form.get("token") or "")
+	customer_name = None
+	if private_token:
+		try:
+			token_hash = hash_tracking_token(private_token)
+		except ValueError as error:
+			frappe.throw(str(error), frappe.ValidationError)
+		order_name = frappe.db.get_value(
+			"Smule Order Request", {"guest_tracking_token_hash": token_hash}, "name"
+		)
+		if not order_name:
+			frappe.throw("پیوند پیگیری معتبر نیست یا دیگر در دسترس نیست.", frappe.PermissionError)
+	else:
+		order_name = str(order_name or form.get("order_name") or "").strip()
+		if frappe.session.user == "Guest":
+			frappe.throw("برای پرداخت مجدد، پیوند خصوصی پیگیری یا حساب مشتری لازم است.", frappe.PermissionError)
+		from smule_store.api.customer_portal import get_customer_for_current_user
+
+		customer_name = get_customer_for_current_user().name
+		if not order_name or not frappe.db.exists("Smule Order Request", order_name):
+			frappe.throw("سفارش برای پرداخت مجدد پیدا نشد.", frappe.PermissionError)
+		if frappe.db.get_value("Smule Order Request", order_name, "customer") != customer_name:
+			frappe.throw("این سفارش به حساب مشتری دیگری تعلق دارد.", frappe.PermissionError)
+
+	# Serialize concurrent taps/retries before checking the payment state and creating another request.
+	frappe.db.sql(
+		"select name from `tabSmule Order Request` where name = %s for update",
+		(order_name,),
+	)
+	order = frappe.get_doc("Smule Order Request", order_name)
+	if customer_name and order.customer != customer_name:
+		frappe.throw("این سفارش به حساب مشتری دیگری تعلق دارد.", frappe.PermissionError)
+	if not order.payment_request or not order.sales_order:
+		frappe.throw("برای این سفارش درخواست پرداخت ERPNext در دسترس نیست.", frappe.ValidationError)
+	if order.payment_status not in PAYMENT_RETRYABLE_STATUSES:
+		frappe.throw("این سفارش هنوز در وضعیت پرداخت مجدد نیست؛ ابتدا وضعیت پرداخت را تازه‌سازی کن.", frappe.ValidationError)
+
+	old_request = frappe.get_doc("Payment Request", order.payment_request)
+	if (
+		old_request.reference_doctype != "Sales Order"
+		or old_request.reference_name != order.sales_order
+	):
+		frappe.throw("وضعیت سند پرداخت سفارش نیازمند بررسی فروشگاه است.", frappe.ValidationError)
+	if order.payment_entry and frappe.db.get_value("Payment Entry", order.payment_entry, "docstatus") == 1:
+		frappe.throw("پرداخت این سفارش قبلاً ثبت شده و پرداخت مجدد مجاز نیست.", frappe.ValidationError)
+	sales_order = frappe.get_doc("Sales Order", order.sales_order)
+	try:
+		request_amount = normalize_amount_irr(old_request.grand_total)
+		order_amount = normalize_amount_irr(sales_order.grand_total)
+	except ZarinPalError as error:
+		frappe.throw(str(error), frappe.ValidationError)
+	payment_entry_exists = bool(_existing_payment_entry(old_request.name))
+	if not is_payment_retry_allowed(
+		order.payment_status,
+		old_request.status,
+		old_request.docstatus,
+		sales_order.docstatus,
+		payment_entry_exists,
+		float(sales_order.advance_paid or 0) > 0,
+		request_amount == order_amount,
+	) or sales_order.status in {"Closed", "Cancelled", "Completed"}:
+		frappe.throw("این سفارش قابل پرداخت مجدد نیست؛ وضعیت آن را با فروشگاه بررسی کن.", frappe.ValidationError)
+
+	settings = frappe.get_single("Smule Store Settings")
+	payment_config = get_live_payment_configuration(settings, throw=True)
+	payment = create_native_payment_request(order, sales_order, settings, payment_config)
+	order.db_set(
+		{
+			"payment_request": payment["payment_request"],
+			"zarinpal_authority": payment["authority"],
+			"zarinpal_sandbox": payment["sandbox"],
+			"payment_status": "در انتظار پرداخت",
+		},
+		update_modified=True,
+	)
+	return {
+		"name": order.name,
+		"paymentRequired": True,
+		"paymentUrl": payment["payment_url"],
+		"payableTotal": payment["amount"],
+		"currency": sales_order.currency,
+	}
 
 
 @frappe.whitelist(allow_guest=True)

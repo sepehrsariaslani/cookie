@@ -13,6 +13,7 @@ import { calculateCookiePrice, DOUGHS } from "@/lib/smule/cookie-builder";
 import { fetchCustomerAccount, type SmuleAccountAddress } from "@/lib/smule/customer-account";
 import { sendOrderRequest } from "@/lib/smule/frappe-client";
 import { getReadySubtotal } from "@/lib/smule/order-draft";
+import { getSafeZarinpalPaymentUrl } from "@/lib/smule/payment";
 import { formatPersianNumber, formatToman, getSmuleProduct, toDisplayTomans } from "@/lib/smule/products";
 import styles from "./CheckoutPage.module.css";
 
@@ -190,15 +191,8 @@ export function CheckoutPage() {
     setSubmittedTrackingHref(trackingHref);
     setMessage("");
     if (result.paymentRequired && result.paymentUrl) {
-      let paymentUrl: URL;
-      try {
-        paymentUrl = new URL(result.paymentUrl);
-      } catch {
-        setMessage("نشانی درگاه معتبر نیست؛ سبد خریدت حفظ شد و سفارش برای پیگیری ثبت شده است.");
-        setSubmitting(false);
-        return;
-      }
-      if (!new Set(["payment.zarinpal.com", "sandbox.zarinpal.com"]).has(paymentUrl.hostname)) {
+      const paymentUrl = getSafeZarinpalPaymentUrl(result.paymentUrl);
+      if (!paymentUrl) {
         setMessage("نشانی درگاه معتبر نیست؛ سبد خریدت حفظ شد و سفارش برای پیگیری ثبت شده است.");
         setSubmitting(false);
         return;

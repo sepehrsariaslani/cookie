@@ -29,6 +29,14 @@ export type FrappeOrderResult = {
   requestedForTime?: string | null;
 };
 
+export type ZarinpalRetryResult = {
+  name: string;
+  paymentRequired: boolean;
+  paymentUrl: string;
+  payableTotal: number;
+  currency: string | null;
+};
+
 export type GuestOrderStatus = {
   name: string;
   status: string;
@@ -122,4 +130,29 @@ export async function fetchGuestOrderStatus(token: string, signal?: AbortSignal)
     signal,
   });
   return readMessage<GuestOrderStatus>(response);
+}
+
+export async function retryZarinpalPayment(
+  input: { trackingToken: string } | { orderRequestName: string },
+  signal?: AbortSignal,
+) {
+  const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="frappe-csrf-token"]')?.content;
+  if (!csrfToken) throw new Error("نشست امن پیدا نشد؛ صفحه را تازه‌سازی کن.");
+
+  const body = new URLSearchParams();
+  if ("trackingToken" in input) body.set("token", input.trackingToken);
+  else body.set("order_name", input.orderRequestName);
+  const response = await fetch("/api/method/smule_store.api.payments.retry_zarinpal_payment", {
+    method: "POST",
+    credentials: "same-origin",
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+      "X-Frappe-CSRF-Token": csrfToken,
+    },
+    body,
+    signal,
+  });
+  return readMessage<ZarinpalRetryResult>(response);
 }

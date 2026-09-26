@@ -21,6 +21,7 @@ import {
 import { useEffect, useState, useSyncExternalStore, type FormEvent } from "react";
 import { CommerceFooter } from "@/components/smule/CommerceFooter";
 import { CommerceHeader } from "@/components/smule/CommerceHeader";
+import { RetryPaymentButton } from "@/components/smule/payment/RetryPaymentButton";
 import {
   archiveCustomerAddress,
   fetchCustomerAccount,
@@ -127,6 +128,9 @@ function OrderCard({ order }: { order: SmuleAccountOrder }) {
         <strong>{amount}</strong>
       </div>
       {order.paymentStatus && <small className={styles.orderPaymentStatus}>پرداخت: {order.paymentStatus}</small>}
+      {order.requestName && (order.paymentStatus === "ناموفق" || order.paymentStatus === "لغوشده") && (
+        <RetryPaymentButton orderRequestName={order.requestName} />
+      )}
     </article>
   );
 }

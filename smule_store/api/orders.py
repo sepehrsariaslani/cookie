@@ -76,6 +76,7 @@ def _get_existing_checkout_result(idempotency_hash):
 	token, token_hash = create_tracking_token()
 	order.db_set("guest_tracking_token_hash", token_hash, update_modified=False)
 	paid = order.payment_status == "پرداخت‌شده"
+	retry_pending_attempt = order.payment_status in {"ناموفق", "لغوشده"}
 	return {
 		"name": order.name,
 		"status": order.status,
@@ -83,7 +84,7 @@ def _get_existing_checkout_result(idempotency_hash):
 		"payableTotal": payment_request.grand_total,
 		"currency": payment_request.currency,
 		"paymentRequired": not paid,
-		"paymentUrl": payment_request.payment_url if not paid else None,
+		"paymentUrl": payment_request.payment_url if not paid and not retry_pending_attempt else None,
 		"trackingToken": token,
 		"requestedForDate": order.requested_for_date,
 		"requestedForTime": order.requested_for_time,
