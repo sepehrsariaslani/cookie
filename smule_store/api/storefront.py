@@ -92,40 +92,53 @@ def _get_prices(item_codes, price_list, uom=None, selling=True):
 	return prices
 
 
-def _get_ready_product_price(item_code, settings):
-	if not item_code or not settings.company:
-		return None
+def _get_ready_product_prices(item_codes, settings):
+	item_codes = list(dict.fromkeys(item_codes or []))
+	if not item_codes or not settings.company:
+		return {}
 	boms = frappe.get_all(
 		"BOM",
 		filters={
-			"item": item_code,
+			"item": ["in", item_codes],
 			"company": settings.company,
 			"is_active": 1,
 			"is_default": 1,
 			"docstatus": 1,
 		},
-		fields=["name", "quantity", "base_total_cost"],
+		fields=["name", "item", "quantity", "base_total_cost"],
 		order_by="modified desc",
-		limit_page_length=2,
+		limit_page_length=max(2, len(item_codes) * 2),
 	)
-	if len(boms) != 1 or not boms[0].quantity or not boms[0].base_total_cost:
-		return None
-	bom = boms[0]
-	unit_cost = bom.base_total_cost / bom.quantity
-	try:
-		pricing = calculate_selling_price(
-			unit_cost,
-			settings.markup_percentage,
-			settings.price_rounding_increment,
-		)
-	except ValueError:
-		return None
-	return {
-		**pricing,
-		"bom_name": bom.name,
-		"bom_quantity": bom.quantity,
-		"bom_total_cost": bom.base_total_cost,
-	}
+	boms_by_item = {}
+	for bom in boms:
+		boms_by_item.setdefault(bom.item, []).append(bom)
+
+	prices = {}
+	for item_code in item_codes:
+		item_boms = boms_by_item.get(item_code, [])
+		if len(item_boms) != 1 or not item_boms[0].quantity or not item_boms[0].base_total_cost:
+			continue
+		bom = item_boms[0]
+		unit_cost = bom.base_total_cost / bom.quantity
+		try:
+			pricing = calculate_selling_price(
+				unit_cost,
+				settings.markup_percentage,
+				settings.price_rounding_increment,
+			)
+		except ValueError:
+			continue
+		prices[item_code] = {
+			**pricing,
+			"bom_name": bom.name,
+			"bom_quantity": bom.quantity,
+			"bom_total_cost": bom.base_total_cost,
+		}
+	return prices
+
+
+def _get_ready_product_price(item_code, settings):
+	return _get_ready_product_prices([item_code], settings).get(item_code)
 
 
 @frappe.whitelist(allow_guest=True)

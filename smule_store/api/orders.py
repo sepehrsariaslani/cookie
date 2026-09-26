@@ -7,7 +7,7 @@ import re
 import frappe
 from frappe.utils import add_days, today
 
-from smule_store.api.storefront import _get_prices, _get_ready_product_price
+from smule_store.api.storefront import _get_prices, _get_ready_product_prices
 from smule_store.domain.cookie import calculate_custom_cookie
 from smule_store.domain.delivery import normalize_delivery_city
 from smule_store.domain.order_tracking import create_tracking_token, hash_tracking_token
@@ -133,14 +133,14 @@ def _normalize_quantity(value):
 	return quantity
 
 
-def _read_product_line(line, settings):
+def _read_product_line(line, settings, price_cache):
 	slug = line.get("productSlug") or line.get("slug")
 	item = _get_store_item(slug, "Product")
 	if not frappe.db.get_value("Item", item.name, "is_sales_item"):
 		_fail("یکی از کوکی‌های آماده برای فروش تنظیم نشده است.")
 	if item.smule_recipe_is_sample:
 		_fail("اطلاعات یکی از کوکی‌های آماده هنوز در آشپزخانه تأیید نشده است.")
-	price = _get_ready_product_price(item.name, settings)
+	price = price_cache.get(item.name)
 	if not price:
 		_fail("برای یکی از کوکی‌های آماده، BOM پیش‌فرضِ فعال و بهای ساخت معتبر در ERPNext پیدا نشد.")
 	price_snapshot = {
@@ -337,13 +337,34 @@ def create_order_request(order=None):
 	if not isinstance(lines, list) or not lines or len(lines) > MAX_ORDER_LINES:
 		_fail("سبد سفارش خالی یا بزرگ‌تر از حد مجاز است.")
 	price_list = settings.selling_price_list or frappe.db.get_single_value("Selling Settings", "selling_price_list")
+	product_slugs = list(
+		dict.fromkeys(
+			(line.get("productSlug") or line.get("slug"))
+			for line in lines
+			if isinstance(line, dict)
+			and (line.get("kind") == "product" or line.get("productSlug") or line.get("slug"))
+			and isinstance(line.get("productSlug") or line.get("slug"), str)
+		)
+	)
+	product_items = frappe.get_all(
+		"Item",
+		filters={
+			"disabled": 0,
+			"smule_enabled_in_storefront": 1,
+			"smule_slug": ["in", product_slugs],
+			"smule_storefront_type": "Product",
+		},
+		fields=["name"],
+		limit_page_length=MAX_ORDER_LINES,
+	) if product_slugs else []
+	price_cache = _get_ready_product_prices([item.name for item in product_items], settings)
 
 	request_items = []
 	for line in lines:
 		if not isinstance(line, dict):
 			_fail("یکی از اقلام سبد معتبر نیست.")
 		if line.get("kind") == "product" or line.get("productSlug") or line.get("slug"):
-			request_items.append(_read_product_line(line, settings))
+			request_items.append(_read_product_line(line, settings, price_cache))
 		elif line.get("kind") == "custom" or line.get("doughId") or line.get("doughSlug"):
 			request_items.append(_read_custom_line(line, settings))
 		else:
