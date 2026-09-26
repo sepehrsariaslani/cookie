@@ -29,6 +29,8 @@
 .primaryAction:disabled { cursor: wait; opacity: .56; transform: none; }
 .signupNote { display: flex; grid-column: 1 / -1; align-items: flex-start; gap: .55rem; padding: .85rem 1rem; border: 1px solid color-mix(in srgb, var(--gold-ink) 24%, transparent); border-radius: 1rem; background: color-mix(in srgb, var(--butter) 15%, white); color: var(--ink-soft); font-size: .82rem; line-height: 1.7; }
 .signupNote svg { flex: 0 0 auto; margin-top: .16rem; color: var(--gold-ink); }
+.signupInfoLink { display: inline-flex; min-height: 44px; flex: none; align-items: center; gap: .3rem; margin-inline-start: auto; color: var(--burgundy); font-weight: 750; white-space: nowrap; text-underline-offset: .2em; }
+.signupInfoLink:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
 .welcomeCard { display: flex; align-items: center; gap: 1rem; padding: 1.1rem 1.25rem; border: 1px solid var(--line); border-radius: 1.3rem; background: var(--surface-card); box-shadow: 0 12px 34px var(--shadow-brand); }
 .avatar { display: grid; width: 56px; height: 56px; flex: 0 0 auto; place-items: center; border-radius: 1.1rem; background: var(--burgundy); color: var(--butter); }
 .welcomeCard h2 { margin: .1rem 0 0; color: var(--burgundy); font-size: 1.35rem; line-height: 1.35; }

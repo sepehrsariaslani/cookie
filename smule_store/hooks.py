@@ -19,6 +19,7 @@ website_route_rules = [
 	{"from_route": "/cart", "to_route": "smule_storefront"},
 	{"from_route": "/checkout", "to_route": "smule_storefront"},
 	{"from_route": "/account", "to_route": "smule_storefront"},
+	{"from_route": "/signup", "to_route": "smule_storefront"},
 	{"from_route": "/my-orders", "to_route": "smule_storefront"},
 	{"from_route": "/orders/view", "to_route": "smule_storefront"},
 	{"from_route": "/order-confirmation", "to_route": "smule_storefront"},

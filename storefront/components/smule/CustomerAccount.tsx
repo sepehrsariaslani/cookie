@@ -313,7 +313,7 @@ export function CustomerAccount() {
                 <span className={styles.eyebrow}>خوش آمدی به اسموله</span>
                 <h2>سفارش‌هایت همیشه همراهت باشند.</h2>
                 <p>وارد حساب شو تا سفارش‌های ثبت‌شده در فروشگاه، نشانی‌ها و پرداخت‌های ثبت‌شدهٔ ERPNext را ببینی.</p>
-                <a className={styles.primaryAction} href="/login?redirect-to=%2Faccount">{data?.signupEnabled && data.signupEmailReady ? "ورود یا ساخت حساب" : "ورود به حساب"} <ArrowLeft size={17} aria-hidden="true" /></a>
+                <a className={styles.primaryAction} href={data?.signupEnabled && data.signupEmailReady ? "/login?redirect-to=%2Faccount#signup" : "/login?redirect-to=%2Faccount"}>{data?.signupEnabled && data.signupEmailReady ? "ساخت حساب یا ورود" : "ورود به حساب"} <ArrowLeft size={17} aria-hidden="true" /></a>
               </div>
               <div className={styles.signupNote}>
                 {data?.signupEnabled && data.signupEmailReady ? (
@@ -323,6 +323,7 @@ export function CustomerAccount() {
                 ) : (
                   <><ShieldCheck size={18} aria-hidden="true" /><span>ساخت حساب جدید فعلاً از تنظیمات امن فروشگاه غیرفعال است؛ ورود با حساب موجود در دسترس است.</span></>
                 )}
+                <a className={styles.signupInfoLink} href="/signup">جزئیات ساخت حساب <ArrowLeft size={14} aria-hidden="true" /></a>
               </div>
             </section>
           ) : (
