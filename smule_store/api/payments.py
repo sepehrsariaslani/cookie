@@ -181,7 +181,29 @@ def zarinpal_callback(Authority=None, Status=None):
 	if not order_name:
 		_redirect_to_receipt()
 		return
+	# Serialize duplicate provider callbacks with payment retries before either can
+	# create a Payment Entry or change the order's payment state.
+	locked_rows = frappe.db.sql(
+		"""
+		select name, payment_entry, payment_request, sales_order, zarinpal_sandbox
+		from `tabSmule Order Request`
+		where name = %s
+		for update
+		""",
+		(order_name,),
+		as_dict=True,
+	)
+	if not locked_rows:
+		_redirect_to_receipt()
+		return
+	locked_order = locked_rows[0]
 	order = frappe.get_doc("Smule Order Request", order_name)
+	# Read linkage from the locking query: under concurrent callbacks, an earlier
+	# transaction may have committed after this request's initial authority lookup.
+	order.payment_entry = locked_order.payment_entry
+	order.payment_request = locked_order.payment_request
+	order.sales_order = locked_order.sales_order
+	order.zarinpal_sandbox = locked_order.zarinpal_sandbox
 	if order.payment_entry and frappe.db.get_value("Payment Entry", order.payment_entry, "docstatus") == 1:
 		_redirect_to_receipt(order.name)
 		return
