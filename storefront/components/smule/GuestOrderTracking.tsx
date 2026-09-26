@@ -62,14 +62,16 @@ export function GuestOrderTracking({ token }: { token: string }) {
   const order = currentLookup?.order ?? null;
   const error = currentLookup?.error ?? "";
   const content = !order ? (
-    error ? (
-      <section className={styles.notFound}>
-        <ClipboardList size={30} aria-hidden="true" />
-        <h1>پیگیری سفارش در دسترس نیست</h1>
-        <p>{error} اگر پیوند پیگیری را کامل باز نکرده‌ای، آن را از همان دستگاه یا پیام اصلی دوباره باز کن.</p>
-        <TrackingActions retry={() => setAttempt((value) => value + 1)} />
-      </section>
-    ) : <div className={styles.loading} role="status" aria-live="polite">در حال دریافت آخرین وضعیت از فروشگاه…</div>
+    <main id="main-content" className={styles.main}>
+      {error ? (
+        <section className={styles.notFound}>
+          <ClipboardList size={30} aria-hidden="true" />
+          <h1>پیگیری سفارش در دسترس نیست</h1>
+          <p>{error} اگر پیوند پیگیری را کامل باز نکرده‌ای، آن را از همان دستگاه یا پیام اصلی دوباره باز کن.</p>
+          <TrackingActions retry={() => setAttempt((value) => value + 1)} />
+        </section>
+      ) : <div className={styles.loading} role="status" aria-live="polite">در حال دریافت آخرین وضعیت از فروشگاه…</div>}
+    </main>
   ) : (
     <main id="main-content" className={styles.main}>
       <div className={styles.statusIcon}><Check size={27} aria-hidden="true" /></div>

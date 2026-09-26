@@ -80,6 +80,43 @@ export function OrderConfirmationPage({ orderId }: { orderId: string }) {
   );
 }
 
+export function OrderRouteLoadingPage() {
+  return (
+    <div className={`${styles.page} commerce-page`}>
+      <div className={styles.shell}>
+        <CommerceHeader current="cart" />
+        <main id="main-content" className={styles.main}>
+          <div className={styles.loading} role="status" aria-live="polite">در حال بررسی پیوند پیگیری…</div>
+        </main>
+      </div>
+      <CommerceFooter />
+    </div>
+  );
+}
+
+export function OrderLinkRequiredPage() {
+  return (
+    <div className={`${styles.page} commerce-page`}>
+      <div className={styles.shell}>
+        <CommerceHeader current="cart" />
+        <main id="main-content" className={styles.main}>
+          <section className={styles.notFound} aria-labelledby="order-link-title">
+            <ClipboardList size={30} aria-hidden="true" />
+            <p className={styles.kicker}>پیگیری سفارش</p>
+            <h1 id="order-link-title">پیوند پیگیری کامل نیست</h1>
+            <p>برای دیدن وضعیت، نشانی خصوصی پیگیری را کامل باز کن؛ اگر از این صفحه وارد شدی، پیوند اصلی را از همان دستگاه یا پیام پس از پرداخت دوباره باز کن.</p>
+            <div className={styles.emptyActions}>
+              <a href="/menu">رفتن به منو <ArrowLeft size={16} aria-hidden="true" /></a>
+              <a href="/account?tab=orders">سفارش‌های حساب من</a>
+            </div>
+          </section>
+        </main>
+      </div>
+      <CommerceFooter />
+    </div>
+  );
+}
+
 export function OrderHistoryPage() {
   const { orders, loaded } = useDraftOrders();
 
