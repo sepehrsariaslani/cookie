@@ -19,6 +19,7 @@
 .button:hover { transform: translateY(-1px); border-color: var(--burgundy-soft); background: var(--burgundy-soft); }
 .button:disabled { opacity: .6; cursor: wait; }
 .button:focus-visible { outline: 3px solid var(--gold-ink); outline-offset: 3px; }
+.status { display: block; margin-top: .4rem; color: var(--burgundy); font-size: .78rem; line-height: 1.55; }
 
 @media (prefers-reduced-motion: reduce) {
   .button { transition: none; }

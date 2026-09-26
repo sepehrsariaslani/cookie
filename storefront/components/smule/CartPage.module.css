@@ -9,6 +9,7 @@
 .cartLayout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, .8fr); align-items: start; gap: 1rem; }
 .lines { display: grid; gap: .7rem; }
 .line { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: start; gap: .9rem; padding: 1rem; border: 1px solid var(--line); border-radius: 1.25rem; background: var(--surface-card); }
+.lineUnpriced { grid-template-columns: minmax(0, 1fr); }
 .cookieMark { display: grid; width: 68px; height: 68px; overflow: hidden; place-items: center; border: 1px solid color-mix(in srgb, var(--gold-ink) 24%, transparent); border-radius: 1rem; background: var(--cream); }
 .cookieMark img { width: 100%; height: 100%; object-fit: cover; }
 .lineDetails { min-width: 0; }

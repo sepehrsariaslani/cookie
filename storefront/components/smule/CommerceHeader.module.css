@@ -39,6 +39,7 @@
 .navigation .cartLink { position: relative; gap: .38rem; border: 1px solid var(--line); background: var(--surface-card); color: var(--burgundy); }
 .cartCount { display: grid; min-width: 20px; height: 20px; place-items: center; padding-inline: .25rem; border-radius: 999px; background: var(--burgundy); color: var(--cream); font-size: .69rem; font-weight: 750; font-variant-numeric: tabular-nums; }
 .navigation .buildLink { background: var(--butter); color: var(--burgundy); }
+.buildLabelShort { display: none; }
 .navigation .buildLink:hover,
 .navigation .activeBuild { background: var(--burgundy); color: var(--cream); }
 .navigation .accountLink { gap: .4rem; padding-inline: .75rem; color: var(--burgundy); }
@@ -54,5 +55,8 @@
   .navigation a { min-height: 42px; padding-inline: .65rem; font-size: .82rem; }
   .navigation .cartLink { padding-inline: .55rem; }
   .navigation .cartLink > span:first-of-type { display: none; }
+  .navigation .buildLink { white-space: nowrap; }
+  .buildLabelFull { display: none; }
+  .buildLabelShort { display: inline; }
   .cartCount { position: absolute; top: -4px; inset-inline-start: -4px; min-width: 17px; height: 17px; font-size: .62rem; }
 }

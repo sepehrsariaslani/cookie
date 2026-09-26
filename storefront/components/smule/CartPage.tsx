@@ -12,6 +12,7 @@ import { CommerceFooter } from "./CommerceFooter";
 import { CommerceHeader } from "./CommerceHeader";
 import { calculateCookiePrice, DOUGHS, getToppingCapacity, getToppingName, MAX_TOPPING_COUNT } from "@/lib/smule/cookie-builder";
 import { formatPersianNumber, formatToman, getSmuleProduct, toDisplayTomans } from "@/lib/smule/products";
+import { MAX_CART_LINE_QUANTITY, MAX_CART_LINES } from "@/lib/smule/cart-limits";
 import styles from "./CartPage.module.css";
 
 export function CartPage() {
@@ -33,12 +34,15 @@ export function CartPage() {
     }, 0);
   const pricedSubtotal = (readySubtotal ?? 0) + (customSubtotal ?? 0);
   const allItemsPriced = readySubtotal !== null && customSubtotal !== null;
-  const checkoutAvailable = isCheckoutAvailable({ itemCount, allItemsPriced, ordersEnabled });
+  const cartWithinServerLimits = items.length <= MAX_CART_LINES && items.every((item) => item.quantity <= MAX_CART_LINE_QUANTITY);
+  const checkoutAvailable = cartWithinServerLimits && isCheckoutAvailable({ itemCount, allItemsPriced, ordersEnabled });
   const checkoutStatus = !connected
     ? "اتصال فروشگاه در دسترس نیست؛ پس از برقراری دوباره، قیمت‌ها را تازه‌سازی کن."
     : !ordersEnabled
       ? "پذیرش سفارش آنلاین هنوز در تنظیمات فروشگاه فعال نشده؛ سبدت را نگه دار تا آماده شود."
-      : !allItemsPriced
+      : !cartWithinServerLimits
+        ? `هر سبد حداکثر ${MAX_CART_LINES} ترکیب و هر ترکیب حداکثر ${MAX_CART_LINE_QUANTITY} عدد می‌پذیرد؛ چند قلم را حذف یا کم کن.`
+        : !allItemsPriced
         ? "قیمت فروش یک یا چند قلم در ERPNext تأیید نشده؛ آن قلم‌ها را حذف کن یا پس از اصلاح کاتالوگ، صفحه را تازه کن."
         : "";
   const totalWeight = customItems.reduce((total, item) => total + item.nutrition.weight * item.quantity, 0);
@@ -77,7 +81,7 @@ export function CartPage() {
                   if (item.kind === "product") {
                     const product = getSmuleProduct(item.productSlug, products);
                     if (!product || product.isSample || !Number.isFinite(product.price) || product.price <= 0) return (
-                      <article className={styles.line} key={item.id}>
+                      <article className={`${styles.line} ${styles.lineUnpriced}`} key={item.id}>
                         <div className={styles.lineDetails}>
                           <div className={styles.lineTitleRow}>
                             <div>
@@ -105,7 +109,7 @@ export function CartPage() {
                             <div className={styles.quantity} aria-label={`تعداد ${product.name}`}>
                               <button type="button" disabled={item.quantity <= 1} onClick={() => setQuantity(item.id, item.quantity - 1)} aria-label="کم‌کردن تعداد"><Minus size={15} aria-hidden="true" /></button>
                               <strong aria-live="polite">{formatPersianNumber(item.quantity)}</strong>
-                              <button type="button" onClick={() => setQuantity(item.id, item.quantity + 1)} aria-label="زیادکردن تعداد"><Plus size={15} aria-hidden="true" /></button>
+                              <button type="button" disabled={item.quantity >= MAX_CART_LINE_QUANTITY} onClick={() => setQuantity(item.id, item.quantity + 1)} aria-label={item.quantity >= MAX_CART_LINE_QUANTITY ? `حداکثر ${MAX_CART_LINE_QUANTITY} عدد از ${product.name}` : "زیادکردن تعداد"}><Plus size={15} aria-hidden="true" /></button>
                             </div>
                           </div>
                         </div>
@@ -135,7 +139,7 @@ export function CartPage() {
                           <div className={styles.quantity} aria-label="تعداد کوکی از این ترکیب">
                             <button type="button" disabled={item.quantity <= 1} onClick={() => setQuantity(item.id, item.quantity - 1)} aria-label="کم‌کردن تعداد"><Minus size={15} aria-hidden="true" /></button>
                             <strong aria-live="polite">{formatPersianNumber(item.quantity)}</strong>
-                            <button type="button" onClick={() => setQuantity(item.id, item.quantity + 1)} aria-label="زیادکردن تعداد"><Plus size={15} aria-hidden="true" /></button>
+                            <button type="button" disabled={item.quantity >= MAX_CART_LINE_QUANTITY} onClick={() => setQuantity(item.id, item.quantity + 1)} aria-label={item.quantity >= MAX_CART_LINE_QUANTITY ? `حداکثر ${MAX_CART_LINE_QUANTITY} عدد از این کوکی` : "زیادکردن تعداد"}><Plus size={15} aria-hidden="true" /></button>
                           </div>
                         </div>
                       </div>

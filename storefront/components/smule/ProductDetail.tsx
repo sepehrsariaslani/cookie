@@ -2,7 +2,7 @@
 
 import { ArrowLeft, Check, ChevronRight, Flame, Info } from "lucide-react";
 import type { SmuleProduct } from "@/lib/smule/products";
-import { formatPersianNumber, isProductOrderable } from "@/lib/smule/products";
+import { formatPersianNumber, getProductDetailLabels, isProductOrderable } from "@/lib/smule/products";
 import { CommerceHeader } from "./CommerceHeader";
 import { CommerceFooter } from "./CommerceFooter";
 import { ProductHero } from "./ProductHero";
@@ -19,6 +19,7 @@ const macroLabels = [
 export function ProductDetail({ product, ordersEnabled = false }: { product: SmuleProduct; ordersEnabled?: boolean }) {
   const hasNutrition = Object.values(product.nutrition).some((value) => value > 0);
   const canOrder = isProductOrderable(product, ordersEnabled);
+  const detailLabels = getProductDetailLabels(product);
   return (
     <div className={`${styles.page} commerce-page`}>
       <div className={styles.shell}>
@@ -33,7 +34,7 @@ export function ProductDetail({ product, ordersEnabled = false }: { product: Smu
         <div className={styles.productLayout}>
           <section className={styles.visualColumn} aria-label={`تصاویر ${product.name}`}>
             <figure className={styles.mainPhoto}>
-              <span className={styles.photoBadge}>نمای نمونه</span>
+              <span className={styles.photoBadge}>{detailLabels.imageBadge}</span>
               <img
                 src={product.image}
                 alt={`نمای کامل کوکی ${product.name}`}
@@ -92,7 +93,7 @@ export function ProductDetail({ product, ordersEnabled = false }: { product: Smu
                 </ul>
               </section>
               <section aria-labelledby="not-included-title">
-                <h2 id="not-included-title">در دستور نمونه نیست</h2>
+                <h2 id="not-included-title">{detailLabels.notIncludedHeading}</h2>
                 <ul className={styles.omittedList}>
                   {product.notIncluded.map((ingredient) => <li key={ingredient}>{ingredient}</li>)}
                 </ul>
@@ -102,7 +103,7 @@ export function ProductDetail({ product, ordersEnabled = false }: { product: Smu
             <section className={styles.allergenNote} aria-labelledby="allergen-title">
               <h2 id="allergen-title">مواد حساسیت‌زا</h2>
               <p>{product.allergens.join("، ")}</p>
-              <small>ترکیبات و هشدار حساسیت باید پیش از فروش با دستور واقعی آشپزخانه تطبیق داده شوند.</small>
+              <small>{detailLabels.allergenGuidance}</small>
             </section>
 
             <div className={styles.actions}>

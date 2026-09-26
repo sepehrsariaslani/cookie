@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Slider } from "@/components/ui/slider";
 import { useCookieCart } from "@/components/smule/CartProvider";
+import { MAX_CART_LINE_QUANTITY, MAX_CART_LINES } from "@/lib/smule/cart-limits";
 import { CookieCanvas } from "@/components/smule/CookieStory";
 import {
   canAddTopping,
@@ -27,7 +28,9 @@ import {
   TOPPING_GROUPS,
   TOPPINGS,
   type DoughId,
+  type DoughOption,
   type ToppingId,
+  type ToppingOption,
 } from "@/lib/smule/cookie-builder";
 import { formatPersianNumber, formatToman, toDisplayTomans } from "@/lib/smule/products";
 import { CommerceHeader } from "./CommerceHeader";
@@ -41,36 +44,95 @@ export function CookieBuilder() {
   const [dough, setDough] = useState<DoughId>("marble");
   const [sizeGrams, setSizeGrams] = useState(50);
   const [toppings, setToppings] = useState<ToppingId[]>([]);
-  const nutrition = useMemo(() => calculateCookieNutrition(dough, toppings, sizeGrams), [dough, toppings, sizeGrams]);
-  const selectedDough = DOUGHS.find((option) => option.id === dough) ?? DOUGHS[0];
-  const selectedNames = TOPPINGS.filter(({ id }) => toppings.includes(id)).map(({ name }) => name);
-  const allergenNames = [...new Set([...selectedDough.allergens, ...TOPPINGS.filter(({ id }) => toppings.includes(id)).flatMap(({ allergens }) => allergens)])];
+  const [cartLimitMessage, setCartLimitMessage] = useState("");
+  const doughOptions = useMemo(() => {
+    if (!connected) return DOUGHS;
+    return DOUGHS.flatMap((option) => {
+      const component = components.find((row) => row.kind === "Dough" && row.slug === option.id);
+      if (!component) return [];
+      return [{
+        ...option,
+        name: component.name || option.name,
+        note: component.description || option.note,
+        ingredients: component.ingredients.length ? component.ingredients : option.ingredients,
+        allergens: component.allergens,
+        visualColor: component.visualColor || option.visualColor,
+        recipe: component.nutrition,
+      } satisfies DoughOption];
+    });
+  }, [components, connected]);
+  const toppingOptions = useMemo(() => {
+    if (!connected) return TOPPINGS;
+    return TOPPINGS.flatMap((option) => {
+      const component = components.find((row) =>
+        ["Topping", "Flavor"].includes(row.kind) && row.slug === option.id,
+      );
+      if (!component) return [];
+      const liveGroup = TOPPING_GROUPS.some((group) => group.id === component.group)
+        ? component.group as ToppingOption["group"]
+        : option.group;
+      return [{
+        ...option,
+        name: component.name || option.name,
+        note: component.description || option.note,
+        group: liveGroup,
+        gramsPer50: component.gramsPer50,
+        allergens: component.allergens,
+        visualGroup: component.visualGroup as ToppingOption["visualGroup"],
+        visualColor: component.visualColor || option.visualColor,
+        recipe: component.nutrition,
+      } satisfies ToppingOption];
+    });
+  }, [components, connected]);
+  const selectedDough = doughOptions.find((option) => option.id === dough) ?? doughOptions[0] ?? DOUGHS[0];
+  const activeDough = selectedDough.id;
+  const activeToppings = useMemo(
+    () => toppings.filter((id) => toppingOptions.some((option) => option.id === id)),
+    [toppingOptions, toppings],
+  );
+  const nutrition = useMemo(
+    () => calculateCookieNutrition(activeDough, activeToppings, sizeGrams, components),
+    [activeDough, activeToppings, components, sizeGrams],
+  );
+  const selectedToppings = toppingOptions.filter(({ id }) => activeToppings.includes(id));
+  const selectedNames = selectedToppings.map(({ name }) => name);
+  const allergenNames = [...new Set([...selectedDough.allergens, ...selectedToppings.flatMap(({ allergens }) => allergens)])];
   const toppingCapacity = getToppingCapacity(sizeGrams);
   const remainingCapacity = Math.max(0, Number((toppingCapacity - nutrition.toppingWeight).toFixed(1)));
-  const hasBlockedToppings = TOPPINGS.some(({ id }) => !toppings.includes(id) && !canAddTopping(toppings, id, sizeGrams));
+  const hasBlockedToppings = toppingOptions.some(({ id }) => !activeToppings.includes(id) && !canAddTopping(activeToppings, id, sizeGrams, components));
   const cookiePrice = useMemo(
     () => connected
-      ? calculateCookiePrice(dough, toppings, sizeGrams, components, currency, pricingMarkupPercent, customCookieFixedCost, priceRoundingIncrement)
+      ? calculateCookiePrice(activeDough, activeToppings, sizeGrams, components, currency, pricingMarkupPercent, customCookieFixedCost, priceRoundingIncrement)
       : null,
-    [connected, components, currency, customCookieFixedCost, dough, priceRoundingIncrement, pricingMarkupPercent, sizeGrams, toppings],
+    [activeDough, activeToppings, connected, components, currency, customCookieFixedCost, priceRoundingIncrement, pricingMarkupPercent, sizeGrams],
   );
   const displayCookiePrice = cookiePrice === null ? null : Math.round(toDisplayTomans(cookiePrice, currency));
 
   function toggleTopping(id: ToppingId, enabled: boolean) {
+    setCartLimitMessage("");
     setToppings((current) => {
-      if (!enabled) return current.filter((item) => item !== id);
-      return canAddTopping(current, id, sizeGrams) ? [...current, id] : current;
+      const available = current.filter((item) => toppingOptions.some((option) => option.id === item));
+      if (!enabled) return available.filter((item) => item !== id);
+      return canAddTopping(available, id, sizeGrams, components) ? [...available, id] : available;
     });
   }
 
   function buildAndAddCookie() {
-    addCookie({ doughId: dough, sizeGrams, toppingIds: toppings, nutrition });
+    const result = addCookie({ doughId: activeDough, sizeGrams, toppingIds: activeToppings, nutrition });
+    if (result !== "added") {
+      setCartLimitMessage(result === "quantity-limit"
+        ? `از این ترکیب حداکثر ${MAX_CART_LINE_QUANTITY} عدد می‌توانی در سبد داشته باشی.`
+        : `سبد حداکثر ${MAX_CART_LINES} ترکیب متفاوت می‌پذیرد؛ برای افزودن این کوکی، یک قلم را حذف کن.`);
+      return;
+    }
+    setCartLimitMessage("");
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- The cart is persisted synchronously before this full navigation.
     window.location.assign("/cart");
   }
 
   function resetBuilder() {
-    setDough("marble");
+    setCartLimitMessage("");
+    setDough(doughOptions.some((option) => option.id === "marble") ? "marble" : doughOptions[0]?.id ?? "marble");
     setSizeGrams(50);
     setToppings([]);
   }
@@ -102,7 +164,10 @@ export function CookieBuilder() {
                 type="button"
                 aria-pressed={sizeGrams === preset.grams}
                 key={preset.grams}
-                onClick={() => setSizeGrams(preset.grams)}
+                onClick={() => {
+                  setCartLimitMessage("");
+                  setSizeGrams(preset.grams);
+                }}
               >
                 <strong>{preset.label}</strong><span>{formatPersianNumber(preset.grams)} گرم</span>
               </button>
@@ -119,7 +184,10 @@ export function CookieBuilder() {
               max={MAX_COOKIE_GRAMS}
               step={COOKIE_GRAM_STEP}
               value={[sizeGrams]}
-              onValueChange={(value) => setSizeGrams(value[0] ?? 50)}
+              onValueChange={(value) => {
+                setCartLimitMessage("");
+                setSizeGrams(value[0] ?? 50);
+              }}
             />
             <span>{formatPersianNumber(MAX_COOKIE_GRAMS)} گرم</span>
           </div>
@@ -135,10 +203,13 @@ export function CookieBuilder() {
               <RadioGroup
                 aria-label="نوع خمیر پایه"
                 className={styles.doughOptions}
-                value={dough}
-                onValueChange={(value) => setDough(value as DoughId)}
+                value={activeDough}
+                onValueChange={(value) => {
+                  setCartLimitMessage("");
+                  setDough(value as DoughId);
+                }}
               >
-                {DOUGHS.map((option) => (
+                {doughOptions.map((option) => (
                   <label className={`${styles.doughOption} ${dough === option.id ? styles.selectedDough : ""}`} key={option.id} htmlFor={`dough-${option.id}`}>
                     <img className={styles.doughSwatch} src={getDoughImage(option.id)} alt="" width={48} height={48} loading="lazy" />
                     <span className={styles.optionCopy}>
@@ -159,7 +230,7 @@ export function CookieBuilder() {
               </legend>
               <div className={styles.toppingCapacity} aria-live="polite">
                 <div className={styles.capacityHeading}>
-                  <strong>{formatPersianNumber(toppings.length)} از {formatPersianNumber(MAX_TOPPING_COUNT)} افزودنی</strong>
+                  <strong>{formatPersianNumber(activeToppings.length)} از {formatPersianNumber(MAX_TOPPING_COUNT)} افزودنی</strong>
                   <span>{formatPersianNumber(nutrition.toppingWeight)} از {formatPersianNumber(toppingCapacity)} گرم</span>
                 </div>
                 <progress value={nutrition.toppingWeight} max={toppingCapacity} aria-label="ظرفیت وزنی تاپینگ‌ها" />
@@ -168,9 +239,9 @@ export function CookieBuilder() {
                   : `${formatPersianNumber(remainingCapacity)} گرم ظرفیت افزودنی باقی مانده است.`}</p>
               </div>
               <div className={styles.groups}>
-                {TOPPING_GROUPS.map((group) => {
-                  const options = TOPPINGS.filter((option) => option.group === group.id);
-                  const selectedCount = options.filter((option) => toppings.includes(option.id)).length;
+                {TOPPING_GROUPS.filter((group) => toppingOptions.some((option) => option.group === group.id)).map((group) => {
+                  const options = toppingOptions.filter((option) => option.group === group.id);
+                  const selectedCount = options.filter((option) => activeToppings.includes(option.id)).length;
                   return (
                     <section className={styles.toppingGroup} key={group.id} aria-labelledby={`group-${group.id}`}>
                       <div className={styles.groupHeading}>
@@ -179,13 +250,13 @@ export function CookieBuilder() {
                       </div>
                       <div className={styles.toppingOptions}>
                         {options.map((option) => {
-                          const checked = toppings.includes(option.id);
+                          const checked = activeToppings.includes(option.id);
                           const inputId = `topping-${option.id}`;
                           const amount = checked
                             ? nutrition.toppingAmounts[option.id] ?? 0
-                            : getToppingAmountForBase(option.id, sizeGrams);
+                            : getToppingAmountForBase(option.id, sizeGrams, components);
                           const calories = Math.round(option.recipe.calories * amount / 100);
-                          const blocked = !checked && !canAddTopping(toppings, option.id, sizeGrams);
+                          const blocked = !checked && !canAddTopping(activeToppings, option.id, sizeGrams, components);
                           return (
                             <div className={`${styles.toppingOption} ${checked ? styles.selectedTopping : ""} ${blocked ? styles.blockedTopping : ""}`} key={option.id}>
                               <Checkbox
@@ -225,6 +296,7 @@ export function CookieBuilder() {
               </Button>
               <Button className={styles.resetButton} variant="ghost" type="button" onClick={resetBuilder}>از نو</Button>
             </div>
+            {cartLimitMessage && <p className={styles.cartLimitMessage} role="alert">{cartLimitMessage}</p>}
           </section>
 
           <aside className={styles.previewPanel} aria-label="پیش‌نمایش زنده و برآورد کوکی" aria-live="polite" aria-atomic="false">
@@ -236,8 +308,8 @@ export function CookieBuilder() {
               <CookieCanvas
                 variant="builder"
                 className={styles.cookieCanvas}
-                customDough={dough}
-                customToppings={toppings}
+                customDough={activeDough}
+                customToppings={activeToppings}
                 customSize={sizeGrams}
               />
               <div className={styles.cookieName}>

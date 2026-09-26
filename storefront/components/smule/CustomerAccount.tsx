@@ -22,6 +22,7 @@ import { useEffect, useState, useSyncExternalStore, type FormEvent } from "react
 import { CommerceFooter } from "@/components/smule/CommerceFooter";
 import { CommerceHeader } from "@/components/smule/CommerceHeader";
 import { RetryPaymentButton } from "@/components/smule/payment/RetryPaymentButton";
+import { formatDeliveryMethod, formatDeliveryStatus } from "@/lib/smule/delivery-presentation";
 import {
   archiveCustomerAddress,
   fetchCustomerAccount,
@@ -112,6 +113,9 @@ function OrderCard({ order }: { order: SmuleAccountOrder }) {
           <strong>{order.name}</strong>
           <small>{faDate(order.date)}{order.requestName ? ` · درخواست ${order.requestName}` : ""}</small>
           {order.deliveryDate && <small>دریافت پیشنهادی: {faDate(order.deliveryDate)}{order.requestedForTime ? ` · ${order.requestedForTime.slice(0, 5)}` : ""}</small>}
+          {order.deliveryMethod && <small>روش دریافت: {formatDeliveryMethod(order.deliveryMethod)}</small>}
+          {order.deliveryAddress && <small>نشانی سفارش: {order.deliveryAddress}</small>}
+          {order.deliveryStatus && <small>وضعیت تحویل: {formatDeliveryStatus(order.deliveryStatus)}</small>}
         </div>
         <span className={styles.statusPill}>{statusText(order.status)}</span>
       </div>
@@ -362,7 +366,7 @@ export function CustomerAccount() {
 
                   {tab === "orders" && (
                     <div className={styles.panelContent}>
-                      <div className={styles.panelHeading}><div><span className={styles.eyebrow}>از ثبت تا تحویل</span><h2>سفارش‌های من</h2></div><a href="/my-orders" className={styles.subtleLink}>پیش‌نویس‌های این دستگاه</a></div>
+                      <div className={styles.panelHeading}><div><span className={styles.eyebrow}>از ثبت تا تحویل</span><h2>سفارش‌های من</h2></div></div>
                       {orderCount ? <div className={styles.cardList}>{data.orders?.map((order) => <OrderCard order={order} key={`${order.kind}-${order.name}`} />)}</div> : <EmptyState icon={ClipboardList} title="سفارشی برای نمایش نیست" detail="فقط سفارش‌های مرتبط با همین حساب نمایش داده می‌شوند. سفارش مهمان قدیمی برای حفظ حریم خصوصی خودکار به حساب وصل نمی‌شود." action={{ label: "رفتن به منو", href: "/menu" }} />}
                     </div>
                   )}

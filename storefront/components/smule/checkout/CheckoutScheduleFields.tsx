@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { CalendarDays, Clock3, LocateFixed, MapPin, X } from "lucide-react";
+import { isCurrentLocationRequest } from "@/lib/smule/location-request";
 import styles from "./CheckoutScheduleFields.module.css";
 
 export type DeliveryCoordinates = { latitude: number; longitude: number };
@@ -12,6 +13,8 @@ type CheckoutScheduleFieldsProps = {
   requestedDate: string;
   requestedTime: string;
   coordinates: DeliveryCoordinates | null;
+  locationRevision: number;
+  getCurrentLocationRevision: () => number;
   dateError?: string;
   onScheduledChange: (scheduled: boolean) => void;
   onScheduleChange: (date: string, time: string) => void;
@@ -29,14 +32,20 @@ export function CheckoutScheduleFields({
   requestedDate,
   requestedTime,
   coordinates,
+  locationRevision,
+  getCurrentLocationRevision,
   dateError,
   onScheduledChange,
   onScheduleChange,
   onCoordinatesChange,
 }: CheckoutScheduleFieldsProps) {
-  const [locating, setLocating] = useState(false);
-  const [locationMessage, setLocationMessage] = useState("");
-  const [locationError, setLocationError] = useState("");
+  const locationRequestId = useRef(0);
+  const [activeLocationRequest, setActiveLocationRequest] = useState<{ id: number; revision: number } | null>(null);
+  const [locationMessageState, setLocationMessageState] = useState<{ revision: number; text: string } | null>(null);
+  const [locationErrorState, setLocationErrorState] = useState<{ revision: number; text: string } | null>(null);
+  const locating = activeLocationRequest?.revision === locationRevision;
+  const locationMessage = locationMessageState?.revision === locationRevision ? locationMessageState.text : "";
+  const locationError = locationErrorState?.revision === locationRevision ? locationErrorState.text : "";
 
   function chooseSchedule(next: boolean) {
     onScheduledChange(next);
@@ -45,41 +54,46 @@ export function CheckoutScheduleFields({
 
   function requestLocation() {
     if (!navigator.geolocation) {
-      setLocationError("مرورگر امکان دسترسی به موقعیت را فراهم نمی‌کند؛ نشانی را دستی وارد کن.");
-      setLocationMessage("");
+      setLocationErrorState({ revision: locationRevision, text: "مرورگر امکان دسترسی به موقعیت را فراهم نمی‌کند؛ نشانی را دستی وارد کن." });
+      setLocationMessageState(null);
       return;
     }
 
-    setLocating(true);
-    setLocationError("");
-    setLocationMessage("");
+    const request = { id: ++locationRequestId.current, revision: locationRevision };
+    setActiveLocationRequest(request);
+    setLocationErrorState(null);
+    setLocationMessageState(null);
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        if (!isCurrentLocationRequest(request, locationRequestId.current, getCurrentLocationRevision())) return;
         onCoordinatesChange({
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
         });
-        setLocationMessage("موقعیت انتخاب شد؛ همراه نشانی برای فروشگاه ارسال می‌شود.");
-        setLocating(false);
+        setLocationMessageState({ revision: request.revision, text: "موقعیت انتخاب شد؛ همراه نشانی برای فروشگاه ارسال می‌شود." });
+        setActiveLocationRequest(null);
       },
       (error) => {
+        if (!isCurrentLocationRequest(request, locationRequestId.current, getCurrentLocationRevision())) return;
         const message = error.code === error.PERMISSION_DENIED
           ? "دسترسی موقعیت تأیید نشد؛ می‌توانی نشانی را دستی وارد کنی."
           : error.code === error.TIMEOUT
             ? "دریافت موقعیت زمان‌بر شد؛ دوباره تلاش کن یا نشانی را دستی وارد کن."
             : "موقعیت دریافت نشد؛ دوباره تلاش کن یا نشانی را دستی وارد کن.";
-        setLocationError(message);
-        setLocationMessage("");
-        setLocating(false);
+        setLocationErrorState({ revision: request.revision, text: message });
+        setLocationMessageState(null);
+        setActiveLocationRequest(null);
       },
       { enableHighAccuracy: true, maximumAge: 30_000, timeout: 12_000 },
     );
   }
 
   function clearLocation() {
+    locationRequestId.current += 1;
+    setActiveLocationRequest(null);
     onCoordinatesChange(null);
-    setLocationError("");
-    setLocationMessage("موقعیت برداشته شد.");
+    setLocationErrorState(null);
+    setLocationMessageState({ revision: locationRevision, text: "موقعیت برداشته شد." });
   }
 
   return (

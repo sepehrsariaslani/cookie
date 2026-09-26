@@ -19,7 +19,6 @@ export function CommerceFooter() {
           <a href="/build-cookie">ساخت کوکی دلخواه</a>
           <a href="/cart">سبد خرید</a>
           <a href="/account">حساب کاربری و سفارش‌های من</a>
-          <a href="/my-orders">پیش‌نویس‌های این دستگاه</a>
           <a href="/pickup">روش‌های دریافت</a>
           <a href="/faq">پرسش‌های پرتکرار</a>
           <a href="/about">دربارهٔ اسموله</a>
@@ -30,7 +29,7 @@ export function CommerceFooter() {
         </nav>
         <div className={styles.contact}>
           <span><MapPin size={15} aria-hidden="true" /> ارسال با اسنپ‌پیک · فقط کرج</span>
-          <span><MessageCircle size={15} aria-hidden="true" /> راه ارتباطی فروشگاه هنوز ثبت نشده</span>
+          <span><MessageCircle size={15} aria-hidden="true" /> پیام پشتیبانی از صفحهٔ تماس</span>
         </div>
       </div>
       <div className={styles.bottom}>

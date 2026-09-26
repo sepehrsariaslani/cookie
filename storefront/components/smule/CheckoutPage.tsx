@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- Native navigation keeps the preview routes stable. */
 
 import { ArrowLeft, Check, ClipboardList, MapPin, ShieldCheck } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { CommerceFooter } from "@/components/smule/CommerceFooter";
 import { CommerceHeader } from "@/components/smule/CommerceHeader";
 import { useCookieCart } from "@/components/smule/CartProvider";
@@ -56,6 +56,8 @@ export function CheckoutPage() {
   const [requestedDate, setRequestedDate] = useState("");
   const [requestedTime, setRequestedTime] = useState("");
   const [coordinates, setCoordinates] = useState<DeliveryCoordinates | null>(null);
+  const [locationRevision, setLocationRevision] = useState(0);
+  const locationRevisionRef = useRef(0);
   const [savedAddresses, setSavedAddresses] = useState<SmuleAccountAddress[]>([]);
   const [selectedAddress, setSelectedAddress] = useState("");
   const canPickup = Boolean(pickupAddress);
@@ -92,6 +94,14 @@ export function CheckoutPage() {
             ? "هنوز روش دریافت قابل انتخابی ثبت نشده است؛ فروشگاه باید نشانی تحویل یا ارسال را تنظیم کند."
             : "";
 
+  const resetDeliveryLocation = useCallback(() => {
+    const nextRevision = locationRevisionRef.current + 1;
+    locationRevisionRef.current = nextRevision;
+    setLocationRevision(nextRevision);
+    setCoordinates(null);
+  }, []);
+  const getCurrentLocationRevision = useCallback(() => locationRevisionRef.current, []);
+
   useEffect(() => {
     const controller = new AbortController();
     fetchCustomerAccount(controller.signal)
@@ -106,6 +116,7 @@ export function CheckoutPage() {
         }));
         const preferred = karajAddresses.find((address) => address.is_primary_address) ?? karajAddresses[0];
         if (preferred) {
+          resetDeliveryLocation();
           setSelectedAddress(preferred.name);
           setCustomer((current) => ({
             ...current,
@@ -116,12 +127,16 @@ export function CheckoutPage() {
       })
       .catch(() => {
         // Checkout remains usable with manual contact and address entry if the account API is unavailable.
-      });
+    });
     return () => controller.abort();
-  }, []);
+  }, [resetDeliveryLocation]);
 
   function updateCustomer(field: keyof typeof customer, value: string) {
     setCustomer((current) => ({ ...current, [field]: value }));
+    if (field === "address" && customer.address !== value) {
+      resetDeliveryLocation();
+      setSelectedAddress("");
+    }
     if (field !== "note" && fieldErrors[field]) {
       clearFieldErrors(field);
     }
@@ -239,12 +254,14 @@ export function CheckoutPage() {
             <i aria-hidden="true" />
             <span className={styles.currentStep}><span>۲</span> اطلاعات تحویل</span>
             <i aria-hidden="true" />
-            <span className={styles.futureStep}><span>۳</span> پرداخت امن</span>
+            <span className={styles.futureStep}><span>۳</span> {checkoutCanProceed ? "پرداخت امن" : "آماده‌سازی فروشگاه"}</span>
           </nav>
           <div className={styles.heading}>
-            <p className={styles.eyebrow}><MapPin size={16} aria-hidden="true" /> پیش از هماهنگی تحویل</p>
-            <h1>جزئیات را یک‌بار وارد کن.</h1>
-            <p>قیمت نهایی از ERPNext خوانده می‌شود و بعد از ثبت سفارش، برای پرداخت امن به زرین‌پال می‌روی.</p>
+            <p className={styles.eyebrow}><MapPin size={16} aria-hidden="true" /> {checkoutCanProceed ? "پیش از هماهنگی تحویل" : "آماده‌سازی سفارش"}</p>
+            <h1>{checkoutCanProceed ? "جزئیات را یک‌بار وارد کن." : "سبدت را برای بعد نگه دار."}</h1>
+            <p>{checkoutCanProceed
+              ? "قیمت نهایی از ERPNext خوانده می‌شود و بعد از ثبت سفارش، برای پرداخت امن به زرین‌پال می‌روی."
+              : "تا وقتی قیمت و روش دریافت تأیید نشده، نیازی به واردکردن اطلاعات تماس نیست؛ سبدت در همین مرورگر می‌ماند."}</p>
           </div>
 
           {!ready ? <div className={styles.empty}>سبد خرید در حال بارگذاری است…</div> : !items.length ? (
@@ -292,6 +309,7 @@ export function CheckoutPage() {
                   {activeDeliveryMethod === "delivery" && <>
                     {savedAddresses.length > 0 && <label className={styles.fullField}><span>نشانی ذخیره‌شده</span><select value={selectedAddress} onChange={(event) => {
                       const selected = savedAddresses.find((address) => address.name === event.target.value);
+                      resetDeliveryLocation();
                       setSelectedAddress(event.target.value);
                       if (selected) setCustomer((current) => ({
                         ...current,
@@ -313,6 +331,8 @@ export function CheckoutPage() {
                     requestedDate={requestedDate}
                     requestedTime={requestedTime}
                     coordinates={coordinates}
+                    locationRevision={locationRevision}
+                    getCurrentLocationRevision={getCurrentLocationRevision}
                     dateError={fieldErrors.requestedForDate}
                     onScheduledChange={(next) => {
                       setScheduled(next);

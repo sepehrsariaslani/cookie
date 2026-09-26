@@ -452,11 +452,21 @@ def get_guest_order_status(token=None):
 			"currency",
 			"payment_status",
 			"payment_request",
+			"customer",
+			"sales_order",
 		],
 		as_dict=True,
 	)
 	if not order:
 		_fail("این پیوند پیگیری معتبر نیست یا دیگر در دسترس نیست.")
+
+	delivery_status = None
+	if order.sales_order and order.customer:
+		delivery_status = frappe.db.get_value(
+			"Sales Order",
+			{"name": order.sales_order, "customer": order.customer, "docstatus": ["!=", 2]},
+			"delivery_status",
+		)
 
 	items = frappe.get_all(
 		"Smule Order Request Item",
@@ -470,6 +480,7 @@ def get_guest_order_status(token=None):
 		"status": order.status,
 		"createdAt": order.creation,
 		"deliveryMethod": order.delivery_method,
+		"deliveryStatus": delivery_status,
 		"requestedForDate": order.requested_for_date,
 		"requestedForTime": order.requested_for_time,
 		"readySubtotal": order.ready_subtotal,

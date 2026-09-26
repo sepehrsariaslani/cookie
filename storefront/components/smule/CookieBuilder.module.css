@@ -84,6 +84,7 @@
 .allergenNotice strong { color: var(--burgundy); font-size: .84rem; }
 .estimateDisclaimer { margin: -.1rem .1rem 0; color: var(--ink-soft); font-size: .78rem; line-height: 1.7; }
 .formActions { display: flex; align-items: center; gap: .55rem; }
+.cartLimitMessage { margin: -.35rem 0 0; color: var(--burgundy); font-size: .82rem; line-height: 1.6; }
 .buildButton { min-height: 50px; padding-inline: 1.05rem; border: 1px solid var(--burgundy); border-radius: 999px; background: var(--butter); color: var(--burgundy); font-family: var(--font-brand); font-size: .91rem; font-weight: 750; box-shadow: 0 8px 18px color-mix(in srgb, var(--butter) 30%, transparent); transition: background 160ms ease, transform 160ms ease; }
 .buildButton:hover { transform: translateY(-1px); background: var(--butter-hover); color: var(--burgundy); }
 .buildButton:focus-visible,

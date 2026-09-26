@@ -17,7 +17,7 @@ import { useCookieCart } from "@/components/smule/CartProvider";
 import { useStorefrontData } from "@/components/smule/StorefrontDataProvider";
 import { CookieCanvas, CookieStorySection } from "@/components/smule/CookieStory";
 import { CommerceFooter } from "@/components/smule/CommerceFooter";
-import { formatPersianNumber, formatToman, type SmuleProduct } from "@/lib/smule/products";
+import { formatPersianNumber, formatProductPrice, type SmuleProduct } from "@/lib/smule/products";
 
 const ingredients = [
   { label: "کره‌ی خالص", note: "نرم و طلایی", className: "ingredient-butter", tx: "190px", ty: "210px" },
@@ -74,10 +74,10 @@ function ProductCard({ product }: { product: SmuleProduct }) {
           <p>{product.description}</p>
         </div>
         <div className="product-bottom">
-          <strong>{formatToman(product.price)}</strong>
+          <strong>{formatProductPrice(product)}</strong>
           <div className="product-actions">
             <a className="product-detail-link" href={`/menu/product?slug=${encodeURIComponent(product.slug)}`}>جزئیات</a>
-            <a className="text-link" href={`/menu/product?slug=${encodeURIComponent(product.slug)}`}>سفارش <ArrowLeft size={17} aria-hidden="true" /></a>
+            {!product.isSample && <a className="text-link" href={`/menu/product?slug=${encodeURIComponent(product.slug)}`}>سفارش <ArrowLeft size={17} aria-hidden="true" /></a>}
           </div>
         </div>
       </div>

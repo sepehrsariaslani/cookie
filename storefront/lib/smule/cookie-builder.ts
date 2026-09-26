@@ -177,15 +177,30 @@ export type CookieNutrition = NutritionFacts & {
 export type CookiePriceComponent = {
   kind: string;
   slug: string;
+  gramsPer50: number;
+  nutrition: NutritionFacts;
   costPerGram: number | null;
   costCurrency: string | null;
   isSample: boolean;
 };
 
-export function getToppingAmountForBase(toppingId: ToppingId, baseWeight: number) {
+function findCookieComponent(components: CookiePriceComponent[] | undefined, kind: string, slug: string) {
+  return components?.find((component) => component.kind === kind && component.slug === slug);
+}
+
+export function getToppingAmountForBase(
+  toppingId: ToppingId,
+  baseWeight: number,
+  components?: CookiePriceComponent[],
+) {
   const option = TOPPINGS.find((item) => item.id === toppingId);
   if (!option) return 0;
-  return Number((option.gramsPer50 * baseWeight / 50).toFixed(1));
+  const liveComponent = findCookieComponent(components, "Topping", toppingId)
+    ?? findCookieComponent(components, "Flavor", toppingId);
+  const gramsPer50 = liveComponent
+    ? Math.max(0, Number.isFinite(liveComponent.gramsPer50) ? liveComponent.gramsPer50 : 0)
+    : option.gramsPer50;
+  return Number((gramsPer50 * baseWeight / 50).toFixed(1));
 }
 
 /** Calculate a preview from the same verified material-cost rule enforced by Frappe. */
@@ -200,16 +215,15 @@ export function calculateCookiePrice(
   roundingIncrement: number,
 ) {
   if (!currency || markupPercent === null || markupPercent <= 0 || markupPercent > 1000 || fixedCost === null || fixedCost < 0 || roundingIncrement <= 0) return null;
-  const dough = components.find((component) => component.kind === "Dough" && component.slug === doughId);
+  const dough = findCookieComponent(components, "Dough", doughId);
   if (!dough || dough.isSample || !dough.costPerGram || dough.costCurrency !== currency) return null;
 
   let materialCost = baseWeight * dough.costPerGram;
   for (const toppingId of toppingIds) {
-    const topping = components.find((component) =>
-      ["Topping", "Flavor"].includes(component.kind) && component.slug === toppingId,
-    );
+    const topping = findCookieComponent(components, "Topping", toppingId)
+      ?? findCookieComponent(components, "Flavor", toppingId);
     if (!topping || topping.isSample || !topping.costPerGram || topping.costCurrency !== currency) return null;
-    materialCost += getToppingAmountForBase(toppingId, baseWeight) * topping.costPerGram;
+    materialCost += getToppingAmountForBase(toppingId, baseWeight, components) * topping.costPerGram;
   }
 
   const calculatedPrice = (materialCost + fixedCost) * (1 + markupPercent / 100);
@@ -221,30 +235,45 @@ export function getToppingCapacity(baseWeight: number) {
   return Number((baseWeight * MAX_TOPPING_WEIGHT_RATIO).toFixed(1));
 }
 
-export function canAddTopping(toppingIds: ToppingId[], toppingId: ToppingId, baseWeight: number) {
+export function canAddTopping(
+  toppingIds: ToppingId[],
+  toppingId: ToppingId,
+  baseWeight: number,
+  components?: CookiePriceComponent[],
+) {
   if (toppingIds.includes(toppingId)) return true;
   if (toppingIds.length >= MAX_TOPPING_COUNT) return false;
-  const currentWeight = toppingIds.reduce((sum, id) => sum + getToppingAmountForBase(id, baseWeight), 0);
-  return currentWeight + getToppingAmountForBase(toppingId, baseWeight) <= getToppingCapacity(baseWeight) + 0.001;
+  const currentWeight = toppingIds.reduce((sum, id) => sum + getToppingAmountForBase(id, baseWeight, components), 0);
+  return currentWeight + getToppingAmountForBase(toppingId, baseWeight, components) <= getToppingCapacity(baseWeight) + 0.001;
 }
 
-export function calculateCookieNutrition(doughId: DoughId, toppingIds: ToppingId[], sizeGrams: number): CookieNutrition {
+export function calculateCookieNutrition(
+  doughId: DoughId,
+  toppingIds: ToppingId[],
+  sizeGrams: number,
+  components?: CookiePriceComponent[],
+): CookieNutrition {
   const dough = DOUGHS.find((option) => option.id === doughId) ?? DOUGHS[0];
+  const liveDough = findCookieComponent(components, "Dough", doughId);
+  const doughRecipe = liveDough?.nutrition ?? dough.recipe;
   const requestedSize = Number.isFinite(sizeGrams) ? sizeGrams : MIN_COOKIE_GRAMS;
   const size = Math.min(MAX_COOKIE_GRAMS, Math.max(MIN_COOKIE_GRAMS, requestedSize));
   const selected = TOPPINGS.filter((option) => toppingIds.includes(option.id));
-  const toppingAmounts = Object.fromEntries(selected.map((option) => [option.id, getToppingAmountForBase(option.id, size)])) as Partial<Record<ToppingId, number>>;
+  const toppingAmounts = Object.fromEntries(selected.map((option) => [option.id, getToppingAmountForBase(option.id, size, components)])) as Partial<Record<ToppingId, number>>;
   const toppingWeight = Number(Object.values(toppingAmounts).reduce((sum, amount) => sum + (amount ?? 0), 0).toFixed(1));
   const doughWeight = size;
   const base = { calories: 0, protein: 0, carbohydrates: 0, fat: 0, sugar: 0 };
   const nutrition = selected.reduce((total, option) => {
     const grams = toppingAmounts[option.id] ?? 0;
+    const liveTopping = findCookieComponent(components, "Topping", option.id)
+      ?? findCookieComponent(components, "Flavor", option.id);
+    const recipe = liveTopping?.nutrition ?? option.recipe;
     return {
-      calories: total.calories + option.recipe.calories * grams / 100,
-      protein: total.protein + option.recipe.protein * grams / 100,
-      carbohydrates: total.carbohydrates + option.recipe.carbohydrates * grams / 100,
-      fat: total.fat + option.recipe.fat * grams / 100,
-      sugar: total.sugar + option.recipe.sugar * grams / 100,
+      calories: total.calories + recipe.calories * grams / 100,
+      protein: total.protein + recipe.protein * grams / 100,
+      carbohydrates: total.carbohydrates + recipe.carbohydrates * grams / 100,
+      fat: total.fat + recipe.fat * grams / 100,
+      sugar: total.sugar + recipe.sugar * grams / 100,
     };
   }, base);
 
@@ -254,11 +283,11 @@ export function calculateCookieNutrition(doughId: DoughId, toppingIds: ToppingId
     doughWeight: Number(doughWeight.toFixed(1)),
     toppingWeight,
     toppingAmounts,
-    calories: Math.round(nutrition.calories + dough.recipe.calories * doughWeight / 100),
-    protein: Number((nutrition.protein + dough.recipe.protein * doughWeight / 100).toFixed(1)),
-    carbohydrates: Number((nutrition.carbohydrates + dough.recipe.carbohydrates * doughWeight / 100).toFixed(1)),
-    fat: Number((nutrition.fat + dough.recipe.fat * doughWeight / 100).toFixed(1)),
-    sugar: Number((nutrition.sugar + dough.recipe.sugar * doughWeight / 100).toFixed(1)),
+    calories: Math.round(nutrition.calories + doughRecipe.calories * doughWeight / 100),
+    protein: Number((nutrition.protein + doughRecipe.protein * doughWeight / 100).toFixed(1)),
+    carbohydrates: Number((nutrition.carbohydrates + doughRecipe.carbohydrates * doughWeight / 100).toFixed(1)),
+    fat: Number((nutrition.fat + doughRecipe.fat * doughWeight / 100).toFixed(1)),
+    sugar: Number((nutrition.sugar + doughRecipe.sugar * doughWeight / 100).toFixed(1)),
   };
 }
 

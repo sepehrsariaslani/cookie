@@ -20,6 +20,8 @@ export type SmuleAccountOrder = {
   total: number;
   paid: number;
   currency?: string;
+  deliveryMethod?: string;
+  deliveryAddress?: string;
   deliveryStatus?: string;
   requestName?: string | null;
   paymentStatus?: string | null;

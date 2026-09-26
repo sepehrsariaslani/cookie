@@ -19,6 +19,8 @@ export type SmuleProduct = {
   price: number;
   className: string;
   image: string;
+  /** True when the storefront is showing its generic fallback rather than a saved product photo. */
+  imageIsSample?: boolean;
   imageFilter: string;
   serving: string;
   nutrition: NutritionFacts;
@@ -41,6 +43,7 @@ export const SMULE_PRODUCTS: SmuleProduct[] = [
     price: 185_000,
     className: "product-classic",
     image: smuleAsset("/images/smule-cookie-chocolate.png"),
+    imageIsSample: true,
     imageFilter: "none",
     serving: "یک عدد · حدود ۱۱۰ گرم",
     nutrition: { calories: 443, protein: 6, carbohydrates: 54, fat: 22, sugar: 27 },
@@ -59,6 +62,7 @@ export const SMULE_PRODUCTS: SmuleProduct[] = [
     price: 195_000,
     className: "product-salt",
     image: smuleAsset("/images/smule-cookie-sea-salt.webp"),
+    imageIsSample: true,
     imageFilter: "none",
     serving: "یک عدد · حدود ۱۱۲ گرم",
     nutrition: { calories: 451, protein: 6, carbohydrates: 53, fat: 23, sugar: 26 },
@@ -77,6 +81,7 @@ export const SMULE_PRODUCTS: SmuleProduct[] = [
     price: 190_000,
     className: "product-caramel",
     image: smuleAsset("/images/smule-cookie-cinnamon-caramel.webp"),
+    imageIsSample: true,
     imageFilter: "none",
     serving: "یک عدد · حدود ۱۱۰ گرم",
     nutrition: { calories: 428, protein: 5, carbohydrates: 56, fat: 20, sugar: 30 },
@@ -95,6 +100,7 @@ export const SMULE_PRODUCTS: SmuleProduct[] = [
     price: 345_000,
     className: "product-mini",
     image: smuleAsset("/images/smule-cookie-mini-box.webp"),
+    imageIsSample: true,
     imageFilter: "none",
     serving: "یک پک چهارعددی · حدود ۱۸۰ گرم",
     nutrition: { calories: 748, protein: 10, carbohydrates: 96, fat: 34, sugar: 44 },
@@ -125,6 +131,23 @@ export function formatPersianNumber(value: number) {
 
 export function formatToman(value: number) {
   return `${formatPersianNumber(value)} تومان`;
+}
+
+export function formatProductPrice(product: Pick<SmuleProduct, "price" | "isSample">) {
+  if (product.isSample || !Number.isFinite(product.price) || product.price <= 0) {
+    return "قیمت هنوز تأیید نشده";
+  }
+  return formatToman(product.price);
+}
+
+export function getProductDetailLabels(product: Pick<SmuleProduct, "isSample" | "imageIsSample">) {
+  return {
+    imageBadge: product.imageIsSample ?? Boolean(product.isSample) ? "نمای نمونه" : "تصویر ثبت‌شدهٔ محصول",
+    notIncludedHeading: product.isSample ? "در دستور نمونه نیست" : "در دستور ثبت‌شده نیست",
+    allergenGuidance: product.isSample
+      ? "ترکیبات و هشدار حساسیت باید پیش از فروش با دستور واقعی آشپزخانه تطبیق داده شوند."
+      : "این اطلاعات از داده‌های ثبت‌شدهٔ همین محصول در ERPNext آمده است؛ برای حساسیت جدی پیش از خرید تأیید نهایی بگیر.",
+  };
 }
 
 export function toDisplayTomans(value: number, currency: string | null | undefined) {

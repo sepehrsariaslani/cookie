@@ -6,7 +6,7 @@ import { AddProductButton } from "@/components/smule/AddProductButton";
 import { CommerceFooter } from "@/components/smule/CommerceFooter";
 import { CommerceHeader } from "@/components/smule/CommerceHeader";
 import { useStorefrontData } from "@/components/smule/StorefrontDataProvider";
-import { formatToman } from "@/lib/smule/products";
+import { formatProductPrice } from "@/lib/smule/products";
 import styles from "./MenuCatalog.module.css";
 
 export function MenuCatalog() {
@@ -63,7 +63,7 @@ export function MenuCatalog() {
                   <div className={styles.cardContent}>
                     <div className={styles.titleRow}><h2>{product.name}</h2><span>{product.serving}</span></div>
                     <p>{product.description}</p>
-                    <div className={styles.meta}><strong>{product.isSample ? `قیمت نمونه · ${formatToman(product.price)}` : formatToman(product.price)}</strong><span>{product.allergens.length} هشدار حساسیت</span></div>
+                    <div className={styles.meta}><strong>{formatProductPrice(product)}</strong><span>{product.allergens.length} هشدار حساسیت</span></div>
                     <div className={styles.actions}>
                       <a href={`/menu/product?slug=${encodeURIComponent(product.slug)}`} className={styles.details}>جزئیات و ترکیبات <ArrowLeft size={15} aria-hidden="true" /></a>
                       <AddProductButton product={product} />

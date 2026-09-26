@@ -1,5 +1,5 @@
 import type { SmuleProduct } from "@/lib/smule/products";
-import { formatToman } from "@/lib/smule/products";
+import { formatProductPrice } from "@/lib/smule/products";
 import styles from "./ProductDetail.module.css";
 
 export function ProductHero({ product }: { product: SmuleProduct }) {
@@ -11,8 +11,9 @@ export function ProductHero({ product }: { product: SmuleProduct }) {
 
       <div className={styles.purchaseLine}>
         <div>
-          <span className={styles.priceLabel}>{product.isSample ? "قیمت نمایشی" : "قیمت فروش"}</span>
-          <strong className={styles.price}>{formatToman(product.price)}</strong>
+          <span className={styles.priceLabel}>{product.isSample ? "وضعیت قیمت" : "قیمت فروش"}</span>
+          <strong className={`${styles.price} ${product.isSample ? styles.pricePending : ""}`}>{formatProductPrice(product)}</strong>
+          {product.isSample && <small className={styles.priceHint}>قیمت پس از ثبت دستور و بهای واقعی در ERPNext اعلام می‌شود.</small>}
         </div>
         <span className={styles.serving}>{product.serving}</span>
       </div>

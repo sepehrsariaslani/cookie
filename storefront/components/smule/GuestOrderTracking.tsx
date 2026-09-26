@@ -8,6 +8,7 @@ import { CommerceFooter } from "@/components/smule/CommerceFooter";
 import { CommerceHeader } from "@/components/smule/CommerceHeader";
 import { fetchGuestOrderStatus, type GuestOrderStatus } from "@/lib/smule/frappe-client";
 import { formatPersianNumber, formatToman, toDisplayTomans } from "@/lib/smule/products";
+import { formatDeliveryMethod, formatDeliveryStatus } from "@/lib/smule/delivery-presentation";
 import { RetryPaymentButton } from "@/components/smule/payment/RetryPaymentButton";
 import styles from "./OrderPages.module.css";
 
@@ -96,7 +97,8 @@ export function GuestOrderTracking({ token }: { token: string }) {
         <div className={styles.orderTotal}><span>{order.paymentAmount ? "مبلغ سفارش" : "جمع اقلامِ قیمت‌گذاری‌شده"}</span><strong>{formatToman(toDisplayTomans(order.paymentAmount ?? order.readySubtotal, order.currency ?? undefined))}</strong></div>
         <div className={styles.contactDetails}>
           <strong>دریافت و زمان پیشنهادی</strong>
-          <span>روش دریافت: {order.deliveryMethod === "تحویل حضوری" ? "تحویل حضوری" : "ارسال"}</span>
+          <span>روش دریافت: {formatDeliveryMethod(order.deliveryMethod)}</span>
+          {order.deliveryStatus && <span>وضعیت تحویل: {formatDeliveryStatus(order.deliveryStatus)}</span>}
           {order.requestedForDate && <span>تاریخ: {formatRequestedDate(order.requestedForDate)}{order.requestedForTime ? ` · ساعت ${order.requestedForTime.slice(0, 5)}` : ""} — منتظر تأیید فروشگاه</span>}
           {order.paymentStatus && <span>وضعیت پرداخت: {order.paymentStatus}</span>}
           {order.paymentStatus === "پرداخت‌شده" && order.name && <span>شمارهٔ سفارش فروش: {order.name}</span>}

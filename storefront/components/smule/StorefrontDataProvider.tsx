@@ -11,6 +11,8 @@ export type StorefrontComponent = {
   slug: string;
   kind: string;
   name: string;
+  description: string;
+  ingredients: string[];
   group: string;
   gramsPer50: number;
   baseWeightGrams: number;
@@ -84,6 +86,8 @@ function mapComponents(rows: FrappeStorefrontCatalog["components"]): StorefrontC
       slug: asString(row.slug),
       kind: asString(row.kind),
       name: asString(row.name),
+      description: asString(row.description),
+      ingredients: asList(row.ingredients),
       group: asString(row.group),
       gramsPer50: asNumber(row.gramsPer50),
       baseWeightGrams: asNumber(row.baseWeightGrams),
@@ -123,6 +127,7 @@ function mapProducts(rows: FrappeStorefrontCatalog["products"], currency: string
       price: displayPrice,
       className: ["product-classic", "product-salt", "product-caramel", "product-mini"][index % 4],
       image: image ? smuleAsset(image) : smuleAsset("/images/smule-cookie.png"),
+      imageIsSample: !image,
       imageFilter: "none",
       serving: asString(row.serving, "یک عدد"),
       nutrition: {

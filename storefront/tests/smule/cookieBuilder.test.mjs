@@ -86,9 +86,9 @@ test("base dough weight is clamped to the supported range", () => {
 
 test("custom-cookie price applies material cost, fixed cost, markup, then rounds upward", () => {
   const components = [
-    { kind: "Dough", slug: "oat", costPerGram: 250, costCurrency: "IRR", isSample: false },
-    { kind: "Topping", slug: "banana", costPerGram: 800, costCurrency: "IRR", isSample: false },
-    { kind: "Topping", slug: "walnut", costPerGram: 1200, costCurrency: "IRR", isSample: false },
+    { kind: "Dough", slug: "oat", gramsPer50: 0, nutrition: { calories: 448, protein: 8, carbohydrates: 61, fat: 18, sugar: 24 }, costPerGram: 250, costCurrency: "IRR", isSample: false },
+    { kind: "Topping", slug: "banana", gramsPer50: 6, nutrition: { calories: 89, protein: 1, carbohydrates: 23, fat: 0, sugar: 12 }, costPerGram: 800, costCurrency: "IRR", isSample: false },
+    { kind: "Topping", slug: "walnut", gramsPer50: 4, nutrition: { calories: 654, protein: 15, carbohydrates: 14, fat: 65, sugar: 3 }, costPerGram: 1200, costCurrency: "IRR", isSample: false },
   ];
 
   assert.equal(calculateCookiePrice("oat", ["banana", "walnut"], 50, components, "IRR", 40, 3_000, 1_000), 36_000);
@@ -96,11 +96,28 @@ test("custom-cookie price applies material cost, fixed cost, markup, then rounds
 
 test("pricing distinguishes same-slug dough and topping and blocks missing or sample rates", () => {
   const sameSlug = [
-    { kind: "Dough", slug: "almond", costPerGram: 10, costCurrency: "IRR", isSample: false },
-    { kind: "Topping", slug: "almond", costPerGram: 100, costCurrency: "IRR", isSample: false },
+    { kind: "Dough", slug: "almond", gramsPer50: 0, nutrition: { calories: 524, protein: 12, carbohydrates: 45, fat: 34, sugar: 21 }, costPerGram: 10, costCurrency: "IRR", isSample: false },
+    { kind: "Topping", slug: "almond", gramsPer50: 4, nutrition: { calories: 579, protein: 21, carbohydrates: 22, fat: 50, sugar: 4 }, costPerGram: 100, costCurrency: "IRR", isSample: false },
   ];
   assert.equal(calculateCookiePrice("almond", ["almond"], 30, sameSlug, "IRR", 20, 0, 100), 700);
   assert.equal(calculateCookiePrice("oat", [], 50, sameSlug, "IRR", 20, 0, 100), null);
   assert.equal(calculateCookiePrice("almond", [], 50, sameSlug, null, 20, 0, 100), null);
   assert.equal(calculateCookiePrice("almond", [], 50, sameSlug, "IRR", null, 0, 100), null);
+});
+
+test("live ERPNext recipe metadata drives topping mass, calories, capacity, and price", () => {
+  const components = [
+    { kind: "Dough", slug: "oat", gramsPer50: 0, nutrition: { calories: 400, protein: 12, carbohydrates: 60, fat: 10, sugar: 5 }, costPerGram: 250, costCurrency: "IRR", isSample: false },
+    { kind: "Topping", slug: "banana", gramsPer50: 10, nutrition: { calories: 500, protein: 4, carbohydrates: 55, fat: 20, sugar: 30 }, costPerGram: 800, costCurrency: "IRR", isSample: false },
+    { kind: "Topping", slug: "caramel", gramsPer50: 20, nutrition: { calories: 390, protein: 2, carbohydrates: 79, fat: 8, sugar: 68 }, costPerGram: 500, costCurrency: "IRR", isSample: false },
+  ];
+
+  const nutrition = calculateCookieNutrition("oat", ["banana"], 50, components);
+  assert.equal(getToppingAmountForBase("banana", 50, components), 10);
+  assert.equal(nutrition.toppingWeight, 10);
+  assert.equal(nutrition.weight, 60);
+  assert.equal(nutrition.calories, 250);
+  assert.equal(nutrition.protein, 6.4);
+  assert.equal(canAddTopping(["banana"], "caramel", 50, components), false);
+  assert.equal(calculateCookiePrice("oat", ["banana"], 50, components, "IRR", 40, 3_000, 1_000), 33_000);
 });

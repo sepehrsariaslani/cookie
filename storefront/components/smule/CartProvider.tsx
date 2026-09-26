@@ -13,6 +13,7 @@ import {
   type DoughId,
   type ToppingId,
 } from "@/lib/smule/cookie-builder";
+import { addCartLine, normalizeCartQuantity, type CartAddResult } from "@/lib/smule/cart-limits";
 
 const STORAGE_KEY = "smule-cookie-cart-v1";
 
@@ -42,8 +43,8 @@ type CartContextValue = {
   items: CartLine[];
   ready: boolean;
   itemCount: number;
-  addCookie: (cookie: Omit<CookieCartLine, "kind" | "id" | "configKey" | "quantity">) => void;
-  addProduct: (productSlug: string, unitPrice: number) => void;
+  addCookie: (cookie: Omit<CookieCartLine, "kind" | "id" | "configKey" | "quantity">) => CartAddResult;
+  addProduct: (productSlug: string, unitPrice: number) => CartAddResult;
   setQuantity: (id: string, quantity: number) => void;
   removeCookie: (id: string) => void;
   clearCart: () => boolean;
@@ -80,14 +81,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
             const savedKind = (entry as { kind?: unknown }).kind;
             if (savedKind === "product") {
               const productLine = entry as Partial<ProductCartLine>;
-              if (typeof productLine.id !== "string" || typeof productLine.productSlug !== "string" || typeof productLine.unitPrice !== "number") return [];
+              if (typeof productLine.id !== "string" || typeof productLine.productSlug !== "string" || typeof productLine.unitPrice !== "number" || !Number.isFinite(productLine.unitPrice)) return [];
               return [{
                 kind: "product",
                 id: productLine.id,
                 configKey: `product:${productLine.productSlug}`,
                 productSlug: productLine.productSlug,
                 unitPrice: productLine.unitPrice,
-                quantity: typeof productLine.quantity === "number" ? Math.max(1, Math.floor(productLine.quantity)) : 1,
+                quantity: normalizeCartQuantity(productLine.quantity),
               }];
             }
             const savedLine = entry as Partial<CookieCartLine>;
@@ -97,9 +98,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
             const toppingIds = Array.isArray(savedLine.toppingIds)
               ? savedLine.toppingIds.filter((id): id is ToppingId => typeof id === "string" && knownToppings.has(id as ToppingId))
               : [];
-            const quantity = typeof savedLine.quantity === "number" && Number.isFinite(savedLine.quantity)
-              ? Math.max(1, Math.floor(savedLine.quantity))
-              : 1;
+            const quantity = normalizeCartQuantity(savedLine.quantity);
             return [{
               ...savedLine,
               kind: "custom",
@@ -126,25 +125,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const addCookie = useCallback((cookie: Omit<CookieCartLine, "kind" | "id" | "configKey" | "quantity">) => {
     const configKey = `${cookie.doughId}:${cookie.sizeGrams}:${[...cookie.toppingIds].sort().join(",")}`;
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    commitItems((current) => {
-      const existing = current.find((item) => item.configKey === configKey);
-      if (existing) return current.map((item) => item.id === existing.id ? { ...item, quantity: item.quantity + 1 } : item);
-      return [...current, { ...cookie, kind: "custom", id, configKey, quantity: 1 }];
-    });
+    const current = itemsRef.current;
+    const added = addCartLine(current, { ...cookie, kind: "custom", id, configKey, quantity: 1 });
+    if (added.result === "added") commitItems(() => added.items);
+    return added.result;
   }, [commitItems]);
 
   const addProduct = useCallback((productSlug: string, unitPrice: number) => {
     const configKey = `product:${productSlug}`;
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    commitItems((current) => {
-      const existing = current.find((item) => item.configKey === configKey);
-      if (existing) return current.map((item) => item.id === existing.id ? { ...item, quantity: item.quantity + 1 } : item);
-      return [...current, { kind: "product", id, configKey, productSlug, unitPrice, quantity: 1 }];
-    });
+    const current = itemsRef.current;
+    const added = addCartLine(current, { kind: "product", id, configKey, productSlug, unitPrice, quantity: 1 });
+    if (added.result === "added") commitItems(() => added.items);
+    return added.result;
   }, [commitItems]);
 
   const setQuantity = useCallback((id: string, quantity: number) => {
-    commitItems((current) => current.map((item) => item.id === id ? { ...item, quantity: Math.max(1, Math.floor(quantity)) } : item));
+    commitItems((current) => current.map((item) => item.id === id ? { ...item, quantity: normalizeCartQuantity(quantity) } : item));
   }, [commitItems]);
 
   const removeCookie = useCallback((id: string) => {

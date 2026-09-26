@@ -1,0 +1,41 @@
+.card { margin-top: 1.25rem; padding: clamp(1rem, 3vw, 1.5rem); border: 1px solid var(--line); border-radius: 1.25rem; background: var(--surface-card); }
+.heading { display: flex; align-items: center; gap: .75rem; }
+.icon { display: grid; flex: 0 0 46px; width: 46px; height: 46px; place-items: center; border-radius: 15px; background: var(--gold-wash); color: var(--burgundy); }
+.heading p { margin: 0 0 .1rem; color: var(--gold-ink); font-size: .82rem; font-weight: 700; }
+.heading h2 { margin: 0; color: var(--burgundy); font-size: 1.35rem; }
+.intro { margin: .65rem 0 1rem; color: var(--ink-soft); font-size: .9rem; line-height: 1.7; }
+.form { display: grid; gap: .85rem; }
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+.fields label { display: grid; min-width: 0; gap: .35rem; color: var(--burgundy); font-size: .85rem; font-weight: 650; }
+.fields label > span { display: flex; align-items: baseline; gap: .3rem; }
+.fields label b { color: #a51f39; }
+.fields input, .fields select, .fields textarea { width: 100%; min-height: 46px; padding: .65rem .75rem; border: 1px solid var(--line); border-radius: .75rem; background: white; color: var(--ink); font: inherit; font-size: .92rem; outline: 0; }
+.fields textarea { min-height: 132px; resize: vertical; line-height: 1.75; }
+.fields input:focus, .fields select:focus, .fields textarea:focus { border-color: var(--gold-ink); box-shadow: 0 0 0 3px var(--gold-wash); }
+.fields input:focus-visible, .fields select:focus-visible, .fields textarea:focus-visible { outline: 2px solid transparent; }
+.fullField { grid-column: 1 / -1; }
+.counter { justify-self: end; color: var(--ink-soft); font-size: .78rem; font-weight: 400; }
+.formBottom { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-top: .2rem; }
+.formBottom p { display: flex; max-width: 34rem; align-items: flex-start; gap: .45rem; margin: 0; color: var(--ink-soft); font-size: .8rem; line-height: 1.7; }
+.formBottom p svg { flex: 0 0 auto; margin-top: .15rem; color: var(--gold-ink); }
+.formBottom p a { color: var(--burgundy); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.formBottom button { display: inline-flex; flex: 0 0 auto; min-height: 48px; align-items: center; justify-content: center; gap: .45rem; padding: 0 1.2rem; border: 0; border-radius: 999px; background: var(--burgundy); color: white; font: inherit; font-weight: 750; cursor: pointer; }
+.formBottom button:hover { background: var(--burgundy-soft); }
+.formBottom button:disabled { opacity: .65; cursor: wait; }
+.spinner { animation: spin .9s linear infinite; }
+.error { margin: 0; padding: .7rem .85rem; border-inline-start: 3px solid #a51f39; border-radius: .65rem; background: color-mix(in srgb, #a51f39 7%, white); color: #74152a; font-size: .87rem; line-height: 1.65; }
+.success { display: flex; align-items: flex-start; gap: .65rem; padding: .9rem; border: 1px solid color-mix(in srgb, #28784b 22%, white); border-radius: .85rem; background: color-mix(in srgb, #28784b 7%, white); color: #205a3a; }
+.success svg { flex: 0 0 auto; margin-top: .1rem; }
+.success strong { display: block; margin-bottom: .15rem; }
+.success p { margin: 0; font-size: .9rem; line-height: 1.7; }
+.honeypot { position: absolute; inset-inline-start: -10000px; width: 1px; height: 1px; overflow: hidden; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 600px) {
+  .fields { grid-template-columns: 1fr; }
+  .fullField { grid-column: auto; }
+  .formBottom { align-items: stretch; flex-direction: column; }
+  .formBottom button { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }

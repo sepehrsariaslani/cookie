@@ -7,6 +7,7 @@ import frappe
 from frappe import _
 from frappe.utils import escape_html
 from frappe.website.utils import is_signup_disabled
+from smule_store.domain.customer_delivery import customer_delivery_snapshot
 
 
 def _fail(message):
@@ -189,6 +190,7 @@ def _order_history(customer):
 			"status",
 			"creation",
 			"delivery_method",
+			"delivery_address",
 			"requested_for_date",
 			"requested_for_time",
 			"ready_subtotal",
@@ -216,20 +218,26 @@ def _order_history(customer):
 				}
 			)
 
+	sales_order_fields = [
+		"name",
+		"status",
+		"docstatus",
+		"transaction_date",
+		"delivery_date",
+		"grand_total",
+		"advance_paid",
+		"currency",
+		"delivery_status",
+	]
+	sales_order_meta = frappe.get_meta("Sales Order")
+	if sales_order_meta.has_field("smule_delivery_method"):
+		sales_order_fields.append("smule_delivery_method")
+	if sales_order_meta.has_field("smule_delivery_address"):
+		sales_order_fields.append("smule_delivery_address")
 	sales_orders = frappe.get_all(
 		"Sales Order",
 		filters={"customer": customer, "docstatus": ["!=", 2]},
-		fields=[
-			"name",
-			"status",
-			"docstatus",
-			"transaction_date",
-			"delivery_date",
-			"grand_total",
-			"advance_paid",
-			"currency",
-			"delivery_status",
-		],
+		fields=sales_order_fields,
 		order_by="creation desc",
 		limit_page_length=100,
 	)
@@ -256,6 +264,13 @@ def _order_history(customer):
 	orders = []
 	for row in sales_orders:
 		request = request_by_sales_order.get(row.name)
+		delivery = customer_delivery_snapshot(
+			request_method=request.delivery_method if request else None,
+			request_address=request.delivery_address if request else None,
+			sales_order_method=row.get("smule_delivery_method"),
+			sales_order_address=row.get("smule_delivery_address"),
+			delivery_status=row.delivery_status,
+		)
 		orders.append(
 			{
 				"name": row.name,
@@ -266,11 +281,11 @@ def _order_history(customer):
 				"total": row.grand_total,
 				"paid": row.advance_paid,
 				"currency": row.currency,
-				"deliveryStatus": row.delivery_status,
 				"requestedForTime": request.requested_for_time if request else None,
 				"requestName": request.name if request else None,
 				"paymentStatus": request.payment_status if request else None,
 				"items": sales_items.get(row.name, []),
+				**delivery,
 			}
 		)
 
@@ -278,6 +293,10 @@ def _order_history(customer):
 	for row in requests:
 		if row.sales_order and row.sales_order in known_sales_orders:
 			continue
+		delivery = customer_delivery_snapshot(
+			request_method=row.delivery_method,
+			request_address=row.delivery_address,
+		)
 		orders.append(
 			{
 				"name": row.name,
@@ -291,6 +310,7 @@ def _order_history(customer):
 				"currency": row.currency,
 				"paymentStatus": row.payment_status,
 				"items": request_items.get(row.name, []),
+				**delivery,
 			}
 		)
 	orders.sort(key=lambda row: str(row.get("date") or ""), reverse=True)

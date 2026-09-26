@@ -25,8 +25,9 @@ export function CommerceHeader({ current }: { current?: "menu" | "builder" | "ca
           <span>سبد</span>
           {ready && itemCount > 0 && <span className={styles.cartCount} aria-label={`${formatPersianNumber(itemCount)} عدد`}>{formatPersianNumber(itemCount)}</span>}
         </a>
-        <a className={`${styles.buildLink} ${current === "builder" ? styles.activeBuild : ""}`} href="/build-cookie">
-          کوکی‌ات را بساز
+        <a className={`${styles.buildLink} ${current === "builder" ? styles.activeBuild : ""}`} href="/build-cookie" aria-label="کوکی‌ات را بساز">
+          <span className={styles.buildLabelFull}>کوکی‌ات را بساز</span>
+          <span className={styles.buildLabelShort} aria-hidden="true">بساز</span>
         </a>
         <a className={`${styles.accountLink} ${current === "account" ? styles.active : ""}`} href="/account" aria-label="حساب کاربری">
           <UserRound size={18} aria-hidden="true" /><span>حساب</span>

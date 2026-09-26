@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { CommerceFooter } from "@/components/smule/CommerceFooter";
 import { CommerceHeader } from "@/components/smule/CommerceHeader";
+import { ContactForm } from "@/components/smule/ContactForm";
 import { PrivacyDataControls } from "@/components/smule/PrivacyDataControls";
 import { STORE_INFO_CONTENT } from "@/lib/smule/site-content";
 import styles from "./StoreInfoPage.module.css";
@@ -71,6 +72,8 @@ export function StoreInfoPage({ kind }: { kind: InfoPageKind }) {
             <BadgeInfo size={20} aria-hidden="true" />
             <p>{content.notice}</p>
           </aside>
+
+          {kind === "contact" && <ContactForm />}
 
           {content.questions ? (
             <section className={styles.questions} aria-label="پرسش‌های پرتکرار">

@@ -29,6 +29,19 @@ export type FrappeOrderResult = {
   requestedForTime?: string | null;
 };
 
+export type SupportRequestInput = {
+  name: string;
+  email: string;
+  topic: string;
+  message: string;
+  website?: string;
+};
+
+export type SupportRequestResult = {
+  accepted: boolean;
+  message: string;
+};
+
 export type ZarinpalRetryResult = {
   name: string;
   paymentRequired: boolean;
@@ -42,6 +55,7 @@ export type GuestOrderStatus = {
   status: string;
   createdAt: string;
   deliveryMethod: string;
+  deliveryStatus?: string;
   requestedForDate?: string | null;
   requestedForTime?: string | null;
   readySubtotal: number;
@@ -111,6 +125,25 @@ export async function sendOrderRequest(order: Record<string, unknown>, signal?: 
     signal,
   });
   return readMessage<FrappeOrderResult>(response);
+}
+
+export async function submitSupportRequest(input: SupportRequestInput, signal?: AbortSignal) {
+  const token = document.querySelector<HTMLMetaElement>('meta[name="frappe-csrf-token"]')?.content;
+  if (!token) throw new Error("رمز امن ارتباط با فروشگاه پیدا نشد؛ صفحه را تازه‌سازی کن.");
+
+  const response = await fetch("/api/method/smule_store.api.support.submit_support_request", {
+    method: "POST",
+    credentials: "same-origin",
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+      "X-Frappe-CSRF-Token": token,
+    },
+    body: new URLSearchParams(input),
+    signal,
+  });
+  return readMessage<SupportRequestResult>(response);
 }
 
 export async function fetchGuestOrderStatus(token: string, signal?: AbortSignal) {

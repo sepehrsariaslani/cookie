@@ -127,7 +127,7 @@ export function OrderHistoryPage() {
         <main id="main-content" className={styles.history}>
           <p className={styles.kicker}>پیگیری روی همین دستگاه</p>
           <h1>پیش‌نویس‌های من</h1>
-          <p className={styles.historyIntro}>این فهرست محلی است و وضعیت سفارش واقعی را از فروشگاه دریافت نمی‌کند.</p>
+          <p className={styles.historyIntro}>این صفحه فقط پیش‌نویس‌های قدیمی همین مرورگر را نشان می‌دهد؛ سفارش‌های واقعی و پرداخت‌ها در حساب کاربری از ERPNext خوانده می‌شوند.</p>
           {!loaded ? <div className={styles.loading}>در حال بارگذاری…</div> : orders.length ? (
             <div className={styles.historyList}>
               {orders.map((order) => <a href={`/orders/view/?id=${encodeURIComponent(order.id)}`} className={styles.historyItem} key={order.id}>
@@ -138,7 +138,7 @@ export function OrderHistoryPage() {
               </a>)}
             </div>
           ) : (
-            <section className={styles.notFound}><ClipboardList size={28} aria-hidden="true" /><h2>هنوز پیش‌نویسی نداری</h2><p>بعد از مرور سبد می‌توانی یک پیش‌نویس روی همین دستگاه بسازی.</p><a href="/menu">انتخاب از منو <ArrowLeft size={16} aria-hidden="true" /></a></section>
+            <section className={styles.notFound}><ClipboardList size={28} aria-hidden="true" /><h2>پیش‌نویس محلی‌ای پیدا نشد</h2><p>برای دیدن سفارش‌های ثبت‌شده و پرداخت‌ها، داشبورد حساب را باز کن.</p><a href="/account?tab=orders">رفتن به سفارش‌های حساب <ArrowLeft size={16} aria-hidden="true" /></a></section>
           )}
         </main>
       </div>
