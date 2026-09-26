@@ -16,10 +16,15 @@ The app keeps ERPNext's native `Item`, `Item Price`, `Customer`, and `Sales Orde
 
 ### Smule site setup
 
-1. Export the React/Vinext website as static files (`output: "export"`) and place the contents of its `dist/client` directory in `smule_store/public/site/`. The export must use `/assets/smule_store/site` as its static asset prefix.
+1. Build the React/Vinext website (`output: "export"`), then run `bash storefront/scripts/sync-frappe-site.sh`. It copies the export into `smule_store/public/site/` and places Vinext's prefixed `_next` assets where Frappe serves `/assets/smule_store/site/_next/`.
 2. Run `bench --site <site> clear-cache` so Frappe reloads the storefront route hooks.
-3. Configure `Smule Store Settings`, create verified Item Prices, replace sample recipe/allergen data, and set pickup details before enabling order requests.
-4. Configure Company, selling price list, and the custom-cookie Item before converting reviewed requests into native draft Sales Orders. Payment remains separate until the merchant chooses and configures a gateway.
+3. Configure `Smule Store Settings`, create verified Item Prices, replace sample recipe/allergen data, and enter the pickup location and hours before enabling checkout.
+4. For custom cookies, set each approved dough and topping's selling `Item Price` in `Gram`. The server prices the base and scaled toppings from those ERPNext rates; sample or unpriced recipes cannot be ordered.
+5. Set the selling Price List and Company currency to `IRR`, choose a Bank/Cash Account and Mode of Payment, and save the ZarinPal merchant ID only in the encrypted Password field. Test in the ZarinPal sandbox first; live checkout remains disabled until sandbox mode is turned off and all required settings are valid. The callback requires a public HTTPS site.
+6. To enable Snapp delivery in Karaj, choose whether its fee is paid separately to Snapp or added as a fixed ERPNext Item to the ZarinPal amount. Delivery stays unavailable until the fee policy is configured. Pickup address/hours and delivery policy are store-owned settings, not guessed defaults.
+7. Checkout creates a submitted ERPNext Sales Order and native Payment Request. A native Payment Entry is created only after the server verifies the ZarinPal authority and exact stored Rial amount. Failed/uncertain callbacks never count as paid.
+
+Customer registration follows Frappe's existing signup and outgoing-email settings; account pages use native ERPNext Customer, Address, Sales Order, and Payment Entry records.
 
 Starter Items can be added using:
 

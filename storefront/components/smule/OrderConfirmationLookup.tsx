@@ -12,7 +12,17 @@ export function OrderConfirmationLookup() {
   useEffect(() => {
     const readLocation = () => {
       setOrderId(new URLSearchParams(window.location.search).get("id") ?? "");
-      setTrackingToken(window.location.hash.slice(1));
+      const urlToken = window.location.hash.slice(1);
+      if (urlToken) {
+        setTrackingToken(urlToken);
+        return;
+      }
+      try {
+        const pending = JSON.parse(sessionStorage.getItem("smule-payment-tracking") ?? "null") as { token?: unknown } | null;
+        setTrackingToken(typeof pending?.token === "string" && /^[A-Za-z0-9_-]{43}$/.test(pending.token) ? pending.token : "");
+      } catch {
+        setTrackingToken("");
+      }
     };
     readLocation();
     window.addEventListener("hashchange", readLocation);

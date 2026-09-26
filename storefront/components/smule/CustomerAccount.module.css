@@ -79,6 +79,7 @@
 .orderItems > small { color: var(--gold-ink); }
 .orderBottom { display: flex; align-items: center; justify-content: space-between; gap: .6rem; margin-top: .75rem; padding-top: .65rem; border-top: 1px solid var(--line); color: var(--ink-soft); font-size: .78rem; }
 .orderBottom strong { color: var(--burgundy); font-size: .85rem; }
+.orderPaymentStatus { display: block; margin-top: .35rem; color: var(--ink-soft); font-size: .72rem; }
 .emptyState { display: grid; min-height: 235px; place-content: center; justify-items: center; gap: .45rem; padding: 1.3rem; border: 1px dashed color-mix(in srgb, var(--burgundy) 20%, transparent); border-radius: 1.1rem; background: color-mix(in srgb, var(--cream) 60%, white); text-align: center; }
 .emptyIcon { display: grid; width: 48px; height: 48px; place-items: center; margin-bottom: .25rem; border-radius: 1rem; background: var(--gold-wash); color: var(--burgundy); }
 .emptyState > strong { color: var(--burgundy); font-size: 1rem; }

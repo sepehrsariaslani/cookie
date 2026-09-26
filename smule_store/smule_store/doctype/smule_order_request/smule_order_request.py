@@ -41,5 +41,5 @@ class SmuleOrderRequest(Document):
 			subtotal += (row.unit_price or 0) * row.qty
 
 		self.ready_subtotal = subtotal
-		if self.status not in {"تبدیل به سفارش فروش", "ردشده"}:
+		if self.status not in {"تبدیل به سفارش فروش", "پرداخت‌شده", "ردشده"}:
 			self.status = "نیازمند قیمت‌گذاری" if needs_quote else "جدید"

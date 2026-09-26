@@ -21,6 +21,7 @@ website_route_rules = [
 	{"from_route": "/account", "to_route": "smule_storefront"},
 	{"from_route": "/my-orders", "to_route": "smule_storefront"},
 	{"from_route": "/orders/view", "to_route": "smule_storefront"},
+	{"from_route": "/order-confirmation", "to_route": "smule_storefront"},
 	{"from_route": "/about", "to_route": "smule_storefront"},
 	{"from_route": "/contact", "to_route": "smule_storefront"},
 	{"from_route": "/faq", "to_route": "smule_storefront"},

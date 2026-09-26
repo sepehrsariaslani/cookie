@@ -11,6 +11,7 @@ from smule_store.api.storefront import _get_prices
 from smule_store.domain.cookie import calculate_custom_cookie
 from smule_store.domain.delivery import normalize_delivery_city
 from smule_store.domain.order_tracking import create_tracking_token, hash_tracking_token
+from smule_store.domain.payments import create_native_payment_request, get_live_payment_configuration
 from smule_store.domain.pricing import calculate_custom_cookie_price
 from smule_store.domain.scheduling import normalize_coordinates, normalize_requested_schedule
 
@@ -62,6 +63,31 @@ def _rate_limit_guest_lookup():
 	if count >= GUEST_LOOKUP_RATE_LIMIT_PER_MINUTE:
 		_fail("درخواست‌های پیگیری زیادی ثبت شده؛ کمی بعد دوباره تلاش کن.")
 	cache.set_value(key, count + 1, expires_in_sec=60)
+
+
+def _get_existing_checkout_result(idempotency_hash):
+	name = frappe.db.get_value("Smule Order Request", {"checkout_idempotency_hash": idempotency_hash}, "name")
+	if not name:
+		return None
+	order = frappe.get_doc("Smule Order Request", name)
+	if not order.payment_request:
+		_fail("ثبت سفارش قبلی در حال تکمیل است؛ کمی بعد دوباره تلاش کن.")
+	payment_request = frappe.get_doc("Payment Request", order.payment_request)
+	token, token_hash = create_tracking_token()
+	order.db_set("guest_tracking_token_hash", token_hash, update_modified=False)
+	paid = order.payment_status == "پرداخت‌شده"
+	return {
+		"name": order.name,
+		"status": order.status,
+		"readySubtotal": order.ready_subtotal,
+		"payableTotal": payment_request.grand_total,
+		"currency": payment_request.currency,
+		"paymentRequired": not paid,
+		"paymentUrl": payment_request.payment_url if not paid else None,
+		"trackingToken": token,
+		"requestedForDate": order.requested_for_date,
+		"requestedForTime": order.requested_for_time,
+	}
 
 
 def _get_store_item(slug, expected_type):
@@ -214,6 +240,14 @@ def create_order_request(order=None):
 	settings = frappe.get_single("Smule Store Settings")
 	if not settings.online_orders_enabled:
 		_fail("ثبت سفارش آنلاین هنوز از سوی فروشگاه فعال نشده است.")
+	payment_config = get_live_payment_configuration(settings, throw=True)
+	idempotency_key = str(payload.get("idempotencyKey") or "")
+	if not re.fullmatch(r"[A-Za-z0-9_-]{43}", idempotency_key):
+		_fail("نشست ثبت سفارش معتبر نیست؛ صفحه را تازه‌سازی کن.")
+	idempotency_hash = hashlib.sha256(idempotency_key.encode("ascii")).hexdigest()
+	existing_result = _get_existing_checkout_result(idempotency_hash)
+	if existing_result:
+		return existing_result
 
 	customer_data = payload.get("customer")
 	if not isinstance(customer_data, dict):
@@ -248,6 +282,13 @@ def create_order_request(order=None):
 	else:
 		if not settings.delivery_enabled:
 			_fail("ارسال سفارش هنوز توسط فروشگاه فعال نشده است.")
+		if not settings.delivery_fee_collection:
+			_fail("روش دریافت هزینهٔ اسنپ‌پیک هنوز توسط فروشگاه تنظیم نشده است.")
+		if (
+			settings.delivery_fee_collection == "افزودن به مبلغ زرین‌پال"
+			and (not settings.delivery_fee or not settings.delivery_charge_item)
+		):
+			_fail("مبلغ و کالای هزینهٔ اسنپ‌پیک هنوز در ERPNext تنظیم نشده است.")
 		try:
 			city = normalize_delivery_city(customer_data.get("city"))
 		except ValueError as error:
@@ -263,10 +304,7 @@ def create_order_request(order=None):
 		from smule_store.api.customer_portal import get_customer_for_current_user
 
 		customer_link = get_customer_for_current_user().name
-	tracking_token = None
-	tracking_token_hash = None
-	if frappe.session.user == "Guest":
-		tracking_token, tracking_token_hash = create_tracking_token()
+	tracking_token, tracking_token_hash = create_tracking_token()
 
 	lines = payload.get("items")
 	if not isinstance(lines, list) or not lines or len(lines) > MAX_ORDER_LINES:
@@ -317,18 +355,41 @@ def create_order_request(order=None):
 			"delivery_latitude": latitude if delivery == "delivery" else None,
 			"delivery_longitude": longitude if delivery == "delivery" else None,
 			"guest_tracking_token_hash": tracking_token_hash,
+			"checkout_idempotency_hash": idempotency_hash,
 			"customer_note": str(customer_data.get("note", ""))[:2000],
 			"currency": price_currency,
 			"items": request_items,
 		}
 	)
-	order_doc.insert(ignore_permissions=True)
+	try:
+		order_doc.insert(ignore_permissions=True)
+	except frappe.DuplicateEntryError:
+		existing_result = _get_existing_checkout_result(idempotency_hash)
+		if existing_result:
+			return existing_result
+		raise
+	sales_order = _create_sales_order(order_doc, settings, submit=True)
+	payment = create_native_payment_request(order_doc, sales_order, settings, payment_config)
+	order_doc.db_set(
+		{
+			"customer": sales_order.customer,
+			"status": "تبدیل به سفارش فروش",
+			"payment_status": "در انتظار پرداخت",
+			"zarinpal_authority": payment["authority"],
+			"zarinpal_sandbox": payment["sandbox"],
+			"payment_request": payment["payment_request"],
+			"sales_order": sales_order.name,
+		},
+		update_modified=True,
+	)
 	return {
 		"name": order_doc.name,
-		"status": order_doc.status,
+		"status": "تبدیل به سفارش فروش",
 		"readySubtotal": order_doc.ready_subtotal,
-		"currency": order_doc.currency,
-		"paymentRequired": False,
+		"payableTotal": payment["amount"],
+		"currency": sales_order.currency,
+		"paymentRequired": True,
+		"paymentUrl": payment["payment_url"],
 		"trackingToken": tracking_token,
 		"requestedForDate": order_doc.requested_for_date,
 		"requestedForTime": order_doc.requested_for_time,
@@ -359,6 +420,8 @@ def get_guest_order_status(token=None):
 			"requested_for_time",
 			"ready_subtotal",
 			"currency",
+			"payment_status",
+			"payment_request",
 		],
 		as_dict=True,
 	)
@@ -381,7 +444,13 @@ def get_guest_order_status(token=None):
 		"requestedForTime": order.requested_for_time,
 		"readySubtotal": order.ready_subtotal,
 		"currency": order.currency,
-		"paymentRequired": False,
+		"paymentRequired": bool(order.payment_request and order.payment_status != "پرداخت‌شده"),
+		"paymentStatus": order.payment_status or "",
+		"paymentAmount": (
+			frappe.db.get_value("Payment Request", order.payment_request, "grand_total")
+			if order.payment_request
+			else order.ready_subtotal
+		),
 		"items": [
 			{"title": row.title_fa, "quantity": row.qty, "quoteRequired": bool(row.quote_required)}
 			for row in items
@@ -422,36 +491,19 @@ def _get_or_create_customer(order_request):
 	return doc.name
 
 
-@frappe.whitelist()
-def convert_to_sales_order(name):
-	"""Convert a reviewed request to a native, unsubmitted ERPNext Sales Order."""
-	allowed_roles = {"System Manager", "Sales Manager"}
-	if not allowed_roles.intersection(frappe.get_roles()):
-		frappe.throw("برای تبدیل درخواست، دسترسی مدیر فروش لازم است.", frappe.PermissionError)
-	if not frappe.has_permission("Sales Order", "create"):
-		frappe.throw("دسترسی ساخت سفارش فروش ندارید.", frappe.PermissionError)
-
-	order_request = frappe.get_doc("Smule Order Request", name)
-	order_request.check_permission("write")
-	if order_request.sales_order:
-		return {"name": order_request.sales_order, "status": "already-converted"}
-	if order_request.status == "ردشده":
-		_fail("درخواست ردشده قابل تبدیل نیست.")
-
-	settings = frappe.get_single("Smule Store Settings")
+def _create_sales_order(order_request, settings, submit=False):
+	"""Build the ERPNext Sales Order once for staff drafts and paid web checkout."""
 	company = settings.company
 	price_list = settings.selling_price_list
 	if not company or not price_list:
 		_fail("شرکت و لیست قیمت را در تنظیمات فروشگاه اسموله مشخص کنید.")
-
 	customer = _get_or_create_customer(order_request)
 	order_request.customer = customer
-	custom_item = settings.custom_cookie_item
 	so_items = []
 	for line in order_request.items:
 		if line.quote_required and (line.unit_price or 0) <= 0:
 			_fail(f"ابتدا قیمت «{line.title_fa}» را تعیین کنید.")
-		item_code = line.item_code if line.line_type == "کوکی آماده" else custom_item
+		item_code = line.item_code if line.line_type == "کوکی آماده" else settings.custom_cookie_item
 		if not item_code:
 			_fail("کالای پایهٔ کوکی سفارشی را در تنظیمات فروشگاه انتخاب کنید.")
 		item_fields = {"item_code": item_code, "qty": line.qty, "rate": line.unit_price}
@@ -464,10 +516,22 @@ def convert_to_sales_order(name):
 					"smule_cookie_base_weight_grams": line.base_weight_grams,
 					"smule_cookie_final_weight_grams": line.final_weight_grams,
 					"smule_cookie_estimated_calories": line.estimated_calories,
-					"smule_cookie_quote_required": 1,
+					"smule_cookie_quote_required": int(bool(line.quote_required)),
 				}
 			)
 		so_items.append(item_fields)
+	if (
+		order_request.delivery_method == "ارسال"
+		and settings.delivery_fee_collection == "افزودن به مبلغ زرین‌پال"
+	):
+		so_items.append(
+			{
+				"item_code": settings.delivery_charge_item,
+				"qty": 1,
+				"rate": settings.delivery_fee,
+				"description": "هزینهٔ ثابت ارسال با اسنپ‌پیک",
+			}
+		)
 
 	sales_order = frappe.get_doc(
 		{
@@ -485,13 +549,39 @@ def convert_to_sales_order(name):
 			"smule_requested_for_time": order_request.requested_for_time,
 			"smule_delivery_latitude": order_request.delivery_latitude,
 			"smule_delivery_longitude": order_request.delivery_longitude,
-			"remarks": f"درخواست وب اسموله: {order_request.name}؛ ثبت اولیهٔ پیش‌نویس، بدون دریافت وجه.",
+			"remarks": f"درخواست وب اسموله: {order_request.name}؛ "
+			+ ("سفارش ثبت‌شده در انتظار پرداخت زرین‌پال." if submit else "پیش‌نویس برای بررسی فروشگاه."),
 		}
 	)
 	sales_order.flags.ignore_pricing_rule = True
 	sales_order.insert(ignore_permissions=True)
+	if submit:
+		sales_order.flags.ignore_permissions = True
+		sales_order.submit()
+	return sales_order
 
-	order_request.sales_order = sales_order.name
-	order_request.status = "تبدیل به سفارش فروش"
-	order_request.save(ignore_permissions=True)
+
+@frappe.whitelist()
+def convert_to_sales_order(name):
+	"""Convert a reviewed request to a native, unsubmitted ERPNext Sales Order."""
+	allowed_roles = {"System Manager", "Sales Manager"}
+	if not allowed_roles.intersection(frappe.get_roles()):
+		frappe.throw("برای تبدیل درخواست، دسترسی مدیر فروش لازم است.", frappe.PermissionError)
+	if not frappe.has_permission("Sales Order", "create"):
+		frappe.throw("دسترسی ساخت سفارش فروش ندارید.", frappe.PermissionError)
+
+	order_request = frappe.get_doc("Smule Order Request", name)
+	order_request.check_permission("write")
+	if order_request.sales_order:
+		return {"name": order_request.sales_order, "status": "already-converted"}
+	if order_request.status == "ردشده":
+		_fail("درخواست ردشده قابل تبدیل نیست.")
+
+	settings = frappe.get_single("Smule Store Settings")
+	sales_order = _create_sales_order(order_request, settings, submit=False)
+
+	order_request.db_set(
+		{"customer": sales_order.customer, "sales_order": sales_order.name, "status": "تبدیل به سفارش فروش"},
+		update_modified=True,
+	)
 	return {"name": sales_order.name, "status": "draft"}

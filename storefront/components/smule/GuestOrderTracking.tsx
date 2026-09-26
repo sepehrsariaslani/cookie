@@ -14,7 +14,8 @@ const statusLabels: Record<string, string> = {
   "جدید": "در صف بررسی فروشگاه",
   "نیازمند قیمت‌گذاری": "در انتظار اعلام قیمت",
   "قیمت‌گذاری‌شده": "قیمت‌گذاری انجام شده؛ منتظر تأیید فروشگاه",
-  "تبدیل به سفارش فروش": "به پیش‌نویس سفارش ERPNext منتقل شد",
+  "تبدیل به سفارش فروش": "سفارش در ERPNext ثبت شده است",
+  "پرداخت‌شده": "پرداخت ثبت و تأیید شده است",
   "ردشده": "این درخواست از سوی فروشگاه پذیرفته نشده است",
 };
 
@@ -41,7 +42,14 @@ export function GuestOrderTracking({ token }: { token: string }) {
   useEffect(() => {
     const controller = new AbortController();
     fetchGuestOrderStatus(token, controller.signal)
-      .then((order) => setLookup({ token, order }))
+      .then((order) => {
+        setLookup({ token, order });
+        try {
+          sessionStorage.removeItem("smule-payment-tracking");
+        } catch {
+          // Tracking still works from the private URL fragment.
+        }
+      })
       .catch((reason: unknown) => {
         if (!controller.signal.aborted) {
           setLookup({ token, error: reason instanceof Error ? reason.message : "وضعیت سفارش دریافت نشد؛ دوباره تلاش کن." });
@@ -68,8 +76,8 @@ export function GuestOrderTracking({ token }: { token: string }) {
       <p className={styles.kicker}>پیگیری درخواست از ERPNext</p>
       <h1>وضعیت درخواست <span>{order.name}</span></h1>
       <div className={styles.importantNotice} role="status">
-        <strong><Clock3 size={18} aria-hidden="true" /> {statusLabels[order.status] ?? order.status}</strong>
-        <p>این درخواست ثبت شده است؛ به‌تنهایی به معنی تأیید نهایی سفارش یا دریافت وجه نیست. برای تغییر یا هماهنگی تحویل، با فروشگاه تماس بگیر.</p>
+        <strong><Clock3 size={18} aria-hidden="true" /> {order.paymentStatus === "پرداخت‌شده" ? "پرداخت با موفقیت ثبت شد" : order.paymentStatus === "تأییدشده در درگاه؛ نیازمند تطبیق" ? "درگاه پرداخت را تأیید کرده؛ ثبت حسابداری در حال بررسی است" : order.paymentStatus === "ناموفق" ? "پرداخت تأیید نشد" : order.paymentStatus === "لغوشده" ? "پرداخت لغو شد" : order.paymentStatus === "در انتظار پرداخت" ? "وضعیت پرداخت در انتظار تأیید است" : statusLabels[order.status] ?? order.status}</strong>
+        <p>{order.paymentStatus === "پرداخت‌شده" ? "رسید پرداخت در ERPNext ثبت شده است. برای زمان یا جزئیات تحویل، فروشگاه در صورت نیاز با تو هماهنگ می‌کند." : order.paymentStatus === "تأییدشده در درگاه؛ نیازمند تطبیق" ? "وجه در زرین‌پال تأیید شده است، اما ERPNext هنوز سند دریافت را ثبت نکرده؛ پیوند پیگیری را نگه دار و برای هماهنگی با اسموله تماس بگیر." : order.paymentStatus === "ناموفق" || order.paymentStatus === "لغوشده" ? "سفارشت برای پیگیری ثبت است اما پرداخت قطعی نشده؛ پیش از تلاش دوباره با فروشگاه هماهنگ کن." : order.paymentStatus === "در انتظار پرداخت" ? "فروشگاه هنوز پاسخ نهایی زرین‌پال را دریافت نکرده است؛ چند لحظه بعد دوباره وضعیت را بررسی کن." : "این درخواست ثبت شده است؛ وضعیت پرداخت یا تأیید نهایی را همین‌جا دنبال کن."}</p>
       </div>
       <section className={styles.orderCard} aria-label="جزئیات عمومی درخواست">
         <h2>اقلام درخواست</h2>
@@ -80,12 +88,13 @@ export function GuestOrderTracking({ token }: { token: string }) {
             <b>× {formatPersianNumber(item.quantity)}</b>
           </article>
         ))}
-        <div className={styles.orderTotal}><span>جمع اقلامِ قیمت‌گذاری‌شده</span><strong>{formatToman(toDisplayTomans(order.readySubtotal, order.currency ?? undefined))}</strong></div>
+        <div className={styles.orderTotal}><span>{order.paymentAmount ? "مبلغ سفارش" : "جمع اقلامِ قیمت‌گذاری‌شده"}</span><strong>{formatToman(toDisplayTomans(order.paymentAmount ?? order.readySubtotal, order.currency ?? undefined))}</strong></div>
         <div className={styles.contactDetails}>
           <strong>دریافت و زمان پیشنهادی</strong>
           <span>روش دریافت: {order.deliveryMethod === "تحویل حضوری" ? "تحویل حضوری" : "ارسال"}</span>
           {order.requestedForDate && <span>تاریخ: {formatRequestedDate(order.requestedForDate)}{order.requestedForTime ? ` · ساعت ${order.requestedForTime.slice(0, 5)}` : ""} — منتظر تأیید فروشگاه</span>}
-          <span>پرداخت آنلاین از این صفحه انجام نمی‌شود.</span>
+          {order.paymentStatus && <span>وضعیت پرداخت: {order.paymentStatus}</span>}
+          {order.paymentStatus === "پرداخت‌شده" && order.name && <span>شمارهٔ سفارش فروش: {order.name}</span>}
         </div>
       </section>
       <section className={styles.nextStep}>

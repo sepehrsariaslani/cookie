@@ -5,8 +5,11 @@ export type FrappeStorefrontCatalog = {
   priceList: string | null;
   ordersEnabled: boolean;
   deliveryEnabled: boolean;
+  deliveryFee?: number;
+  deliveryFeeCollection?: string;
   pickupAddress: string;
   pickupHours: string;
+  paymentsEnabled?: boolean;
 };
 
 export type FrappeOrderResult = {
@@ -14,7 +17,9 @@ export type FrappeOrderResult = {
   status: string;
   readySubtotal: number;
   currency: string | null;
-  paymentRequired: false;
+  paymentRequired: boolean;
+  paymentUrl?: string;
+  payableTotal?: number;
   trackingToken?: string | null;
   requestedForDate?: string | null;
   requestedForTime?: string | null;
@@ -29,7 +34,9 @@ export type GuestOrderStatus = {
   requestedForTime?: string | null;
   readySubtotal: number;
   currency: string | null;
-  paymentRequired: false;
+  paymentRequired: boolean;
+  paymentStatus?: string;
+  paymentAmount?: number;
   items: Array<{ title: string; quantity: number; quoteRequired: boolean }>;
 };
 

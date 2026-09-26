@@ -31,6 +31,8 @@ type StorefrontData = {
   error: string;
   ordersEnabled: boolean;
   deliveryEnabled: boolean;
+  deliveryFee: number;
+  deliveryFeeCollection: string;
   pickupAddress: string;
   pickupHours: string;
   currency: string | null;
@@ -44,6 +46,8 @@ const previewState: StorefrontData = {
   error: "",
   ordersEnabled: false,
   deliveryEnabled: false,
+  deliveryFee: 0,
+  deliveryFeeCollection: "",
   pickupAddress: "",
   pickupHours: "",
   currency: null,
@@ -159,6 +163,8 @@ function mapCatalog(catalog: FrappeStorefrontCatalog): StorefrontData {
     error: "",
     ordersEnabled: Boolean(catalog.ordersEnabled),
     deliveryEnabled: Boolean(catalog.deliveryEnabled),
+    deliveryFee: asNumber(catalog.deliveryFee),
+    deliveryFeeCollection: asString(catalog.deliveryFeeCollection),
     pickupAddress: asString(catalog.pickupAddress),
     pickupHours: asString(catalog.pickupHours),
     currency,

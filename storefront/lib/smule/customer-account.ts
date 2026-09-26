@@ -22,6 +22,7 @@ export type SmuleAccountOrder = {
   currency?: string;
   deliveryStatus?: string;
   requestName?: string | null;
+  paymentStatus?: string | null;
   items: Array<{ title: string; quantity: number; quoteRequired?: boolean }>;
 };
 

@@ -3,6 +3,8 @@
 import frappe
 from frappe.utils import getdate, today
 
+from smule_store.domain.payments import get_live_payment_configuration
+
 
 ITEM_FIELDS = [
 	"name",
@@ -109,6 +111,7 @@ def get_catalog():
 	prices = _get_prices(product_codes, price_list)
 	component_prices = _get_prices(component_codes, price_list, uom="Gram")
 	price_currency = frappe.db.get_value("Price List", price_list, "currency") if price_list else None
+	payment_ready = bool(get_live_payment_configuration(settings))
 
 	products = []
 	components = []
@@ -171,8 +174,22 @@ def get_catalog():
 		"components": components,
 		"currency": price_currency,
 		"priceList": price_list,
-		"ordersEnabled": bool(settings.online_orders_enabled),
-		"deliveryEnabled": bool(settings.delivery_enabled),
+		"ordersEnabled": payment_ready,
+		"paymentsEnabled": payment_ready,
+		"deliveryEnabled": bool(
+			settings.delivery_enabled
+			and settings.delivery_fee_collection
+			and (
+				settings.delivery_fee_collection == "پرداخت جداگانه به اسنپ‌پیک"
+				or (
+					settings.delivery_fee_collection == "افزودن به مبلغ زرین‌پال"
+					and settings.delivery_fee > 0
+					and settings.delivery_charge_item
+				)
+			)
+		),
+		"deliveryFee": settings.delivery_fee or 0,
+		"deliveryFeeCollection": settings.delivery_fee_collection or "",
 		"pickupAddress": settings.pickup_address or "",
 		"pickupHours": settings.pickup_hours or "",
 	}

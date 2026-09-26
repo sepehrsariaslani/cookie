@@ -194,6 +194,7 @@ def _order_history(customer):
 			"ready_subtotal",
 			"currency",
 			"sales_order",
+			"payment_status",
 		],
 		order_by="creation desc",
 		limit_page_length=100,
@@ -268,6 +269,7 @@ def _order_history(customer):
 				"deliveryStatus": row.delivery_status,
 				"requestedForTime": request.requested_for_time if request else None,
 				"requestName": request.name if request else None,
+				"paymentStatus": request.payment_status if request else None,
 				"items": sales_items.get(row.name, []),
 			}
 		)
@@ -287,6 +289,7 @@ def _order_history(customer):
 				"total": row.ready_subtotal,
 				"paid": 0,
 				"currency": row.currency,
+				"paymentStatus": row.payment_status,
 				"items": request_items.get(row.name, []),
 			}
 		)

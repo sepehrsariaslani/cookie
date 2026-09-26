@@ -17,8 +17,14 @@
         "pickup_hours",
         "delivery_enabled",
         "delivery_fee",
+        "delivery_fee_collection",
+        "delivery_charge_item",
         "payment_section",
-        "payment_gateway",
+        "zarinpal_enabled",
+        "zarinpal_merchant_id",
+        "zarinpal_sandbox",
+        "mode_of_payment",
+        "payment_account",
         "setup_note"
     ],
     "fields": [
@@ -30,11 +36,17 @@
         {"fieldname": "pickup_section", "fieldtype": "Section Break", "label": "تحویل"},
         {"fieldname": "pickup_address", "fieldtype": "Small Text", "label": "نشانی تحویل حضوری"},
         {"fieldname": "pickup_hours", "fieldtype": "Small Text", "label": "ساعت تحویل حضوری"},
-        {"fieldname": "delivery_enabled", "fieldtype": "Check", "label": "ارسال فعال باشد", "default": "0"},
-        {"fieldname": "delivery_fee", "fieldtype": "Currency", "label": "هزینهٔ پایهٔ ارسال", "default": "0", "depends_on": "eval:doc.delivery_enabled"},
+        {"fieldname": "delivery_enabled", "fieldtype": "Check", "label": "ارسال با اسنپ‌پیک فعال باشد", "default": "0"},
+        {"fieldname": "delivery_fee_collection", "fieldtype": "Select", "label": "روش دریافت هزینهٔ پیک", "options": "\nپرداخت جداگانه به اسنپ‌پیک\nافزودن به مبلغ زرین‌پال", "depends_on": "eval:doc.delivery_enabled"},
+        {"fieldname": "delivery_fee", "fieldtype": "Currency", "label": "هزینهٔ ثابت ارسال (ریال)", "default": "0", "depends_on": "eval:doc.delivery_enabled && doc.delivery_fee_collection=='افزودن به مبلغ زرین‌پال'"},
+        {"fieldname": "delivery_charge_item", "fieldtype": "Link", "label": "کالای هزینهٔ ارسال در ERPNext", "options": "Item", "depends_on": "eval:doc.delivery_enabled && doc.delivery_fee_collection=='افزودن به مبلغ زرین‌پال'"},
         {"fieldname": "payment_section", "fieldtype": "Section Break", "label": "پرداخت"},
-        {"fieldname": "payment_gateway", "fieldtype": "Data", "label": "درگاه پرداخت (پس از انتخاب فروشگاه)"},
-        {"fieldname": "setup_note", "fieldtype": "HTML", "options": "<div dir='rtl'><p>تا زمانی که شرکت، کالاها، قیمت‌ها، نشانی تحویل و درگاه تأیید نشده‌اند، سفارش‌گیری آنلاین خاموش می‌ماند. سفارش‌های سایت در ERPNext ثبت می‌شوند و پرداخت خودکار تا راه‌اندازی امن زرین‌پال انجام نمی‌شود.</p><p><strong>قیمت کوکی سفارشی:</strong> برای هر خمیر و افزودنیِ تأییدشده، واحد پایهٔ کالا را گرم قرار دهید و نرخ فروش همان کالا را با واحد «Gram» در لیست قیمت فروش وارد کنید. قیمت کوکی از جمعِ (گرم خمیر × نرخ هر گرم) و (گرم هر افزودنی × نرخ هر گرم) به دست می‌آید. خمیر یا افزودنیِ نمونه یا بدون نرخ، قیمت قطعی نمی‌گیرد و قابل ثبت به‌عنوان سفارش نهایی نیست. قیمت محصولات آماده از Item Price همان کالا خوانده می‌شود.</p><p>محدودهٔ ارسال اعلام‌شده: کرج، با اسنپ‌پیک. هزینهٔ پیک هنوز وارد جمع سفارش نشده؛ روش محاسبه و دریافت آن باید پیش از فعال‌کردن فروش تعیین شود.</p></div>"}
+        {"fieldname": "zarinpal_enabled", "fieldtype": "Check", "label": "پرداخت زرین‌پال فعال باشد", "default": "0", "depends_on": "eval:doc.online_orders_enabled"},
+        {"fieldname": "zarinpal_merchant_id", "fieldtype": "Password", "label": "شناسهٔ پذیرندهٔ زرین‌پال", "depends_on": "eval:doc.zarinpal_enabled"},
+        {"fieldname": "zarinpal_sandbox", "fieldtype": "Check", "label": "حالت آزمایشی زرین‌پال", "default": "1", "depends_on": "eval:doc.zarinpal_enabled"},
+        {"fieldname": "mode_of_payment", "fieldtype": "Link", "label": "روش پرداخت در ERPNext", "options": "Mode of Payment", "depends_on": "eval:doc.zarinpal_enabled"},
+        {"fieldname": "payment_account", "fieldtype": "Link", "label": "حساب بانکی دریافت وجه در ERPNext", "options": "Account", "depends_on": "eval:doc.zarinpal_enabled"},
+        {"fieldname": "setup_note", "fieldtype": "HTML", "options": "<div dir='rtl'><p>فروش آنلاین فقط پس از تکمیل شرکت، لیست قیمت، روش تحویل، حساب بانکی، روش پرداخت و شناسهٔ پذیرنده فعال می‌شود. شناسهٔ پذیرنده در فیلد رمزنگاری‌شده ذخیره می‌شود؛ آن را در چت یا کد سایت وارد نکنید. حالت آزمایشی به‌صورت پیش‌فرض روشن است و برای دریافت پول واقعی باید پس از آزمون، آن را آگاهانه خاموش کنید.</p><p><strong>قیمت کوکی سفارشی:</strong> برای هر خمیر و افزودنیِ تأییدشده، نرخ فروش همان کالا را با واحد «Gram» در لیست قیمت فروش ثبت کنید. مبلغ از جمعِ (گرم خمیر × نرخ هر گرم) و (گرم هر افزودنی × نرخ هر گرم) محاسبه می‌شود. مواد نمونه یا بدون نرخ، قابل سفارش نهایی نیستند. قیمت محصولات آماده از Item Price همان کالا خوانده می‌شود. زرین‌پال مبلغ را به ریال دریافت می‌کند؛ لیست قیمت و ارز سفارش باید IRR باشد.</p><p>ارسال کرج با اسنپ‌پیک است. پیش از فعال‌کردن ارسال، سیاست هزینه را انتخاب کنید: پرداخت جدا به پیک، یا مبلغ ثابت همراه سفارش آنلاین. برای حالت دوم، کالای هزینهٔ ارسال را به ERPNext وصل کنید. نشانی و ساعت تحویل حضوری نیز باید کامل باشد.</p></div>"}
     ],
     "permissions": [
         {"role": "System Manager", "read": 1, "write": 1},

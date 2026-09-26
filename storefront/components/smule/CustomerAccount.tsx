@@ -126,6 +126,7 @@ function OrderCard({ order }: { order: SmuleAccountOrder }) {
         <span>{order.kind === "sales-order" ? "سفارش ERPNext" : "درخواست سفارش"}</span>
         <strong>{amount}</strong>
       </div>
+      {order.paymentStatus && <small className={styles.orderPaymentStatus}>پرداخت: {order.paymentStatus}</small>}
     </article>
   );
 }

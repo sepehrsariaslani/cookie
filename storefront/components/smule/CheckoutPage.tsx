@@ -30,9 +30,20 @@ function normalizeDeliveryCity(value: string) {
   return value.normalize("NFKC").replace(/ك/g, "ک").replace(/[يى]/g, "ی").replace(/\s+/g, " ").trim();
 }
 
+function getCheckoutIdempotencyKey() {
+  const keyName = "smule-checkout-idempotency-v1";
+  const saved = sessionStorage.getItem(keyName);
+  if (saved && /^[A-Za-z0-9_-]{43}$/.test(saved)) return saved;
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  const key = btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  sessionStorage.setItem(keyName, key);
+  return key;
+}
+
 export function CheckoutPage() {
   const { items, ready, clearCart } = useCookieCart();
-  const { products, components, currency, connected, loading, ordersEnabled, deliveryEnabled, pickupAddress, pickupHours } = useStorefrontData();
+  const { products, components, currency, connected, loading, ordersEnabled, deliveryEnabled, deliveryFee, deliveryFeeCollection, pickupAddress, pickupHours } = useStorefrontData();
   const [message, setMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<CheckoutErrors>({});
   const [submitting, setSubmitting] = useState(false);
@@ -59,6 +70,10 @@ export function CheckoutPage() {
     const unitPrice = customPrices.get(item.id);
     return total + (unitPrice === null || unitPrice === undefined ? 0 : Math.round(toDisplayTomans(unitPrice, currency)) * item.quantity);
   }, 0);
+  const deliveryFeeDisplay = activeDeliveryMethod === "delivery"
+    && deliveryFeeCollection === "افزودن به مبلغ زرین‌پال"
+    ? Math.round(toDisplayTomans(deliveryFee, currency))
+    : 0;
   const unpricedCustomCount = [...customPrices.values()].filter((price) => price === null).length;
   const allItemsPriced = unpricedCustomCount === 0 && items.every((item) => {
     if (item.kind === "custom") return customPrices.get(item.id) !== null;
@@ -144,6 +159,7 @@ export function CheckoutPage() {
     try {
       result = await sendOrderRequest({
         website: "",
+        idempotencyKey: getCheckoutIdempotencyKey(),
         customer: {
           name: customer.name.trim(),
           phone: normalizePhoneNumber(customer.phone),
@@ -167,13 +183,47 @@ export function CheckoutPage() {
       setSubmitting(false);
       return;
     }
-
     const trackingHref = result.trackingToken
-      ? `/orders/view/#${result.trackingToken}`
+      ? `/order-confirmation/#${result.trackingToken}`
       : "/account?tab=orders&submitted=1";
     setSubmittedOrderId(result.name);
     setSubmittedTrackingHref(trackingHref);
     setMessage("");
+    if (result.paymentRequired && result.paymentUrl) {
+      let paymentUrl: URL;
+      try {
+        paymentUrl = new URL(result.paymentUrl);
+      } catch {
+        setMessage("نشانی درگاه معتبر نیست؛ سبد خریدت حفظ شد و سفارش برای پیگیری ثبت شده است.");
+        setSubmitting(false);
+        return;
+      }
+      if (!new Set(["payment.zarinpal.com", "sandbox.zarinpal.com"]).has(paymentUrl.hostname)) {
+        setMessage("نشانی درگاه معتبر نیست؛ سبد خریدت حفظ شد و سفارش برای پیگیری ثبت شده است.");
+        setSubmitting(false);
+        return;
+      }
+      try {
+        sessionStorage.removeItem("smule-checkout-idempotency-v1");
+      } catch {
+        // The server-side idempotency hash still prevents duplicate orders for this checkout attempt.
+      }
+      if (result.trackingToken) {
+        try {
+          sessionStorage.setItem("smule-payment-tracking", JSON.stringify({ name: result.name, token: result.trackingToken }));
+        } catch {
+          // The provider callback returns a private tracking link if session storage is unavailable.
+        }
+      }
+      clearCart();
+      window.location.assign(paymentUrl.toString());
+      return;
+    }
+    try {
+      sessionStorage.removeItem("smule-checkout-idempotency-v1");
+    } catch {
+      // The server-side idempotency hash still prevents duplicate orders for this checkout attempt.
+    }
     clearCart();
     window.location.assign(trackingHref);
   }
@@ -188,12 +238,12 @@ export function CheckoutPage() {
             <i aria-hidden="true" />
             <span className={styles.currentStep}><span>۲</span> اطلاعات تحویل</span>
             <i aria-hidden="true" />
-            <span className={styles.futureStep}><span>۳</span> بررسی درخواست</span>
+            <span className={styles.futureStep}><span>۳</span> پرداخت امن</span>
           </nav>
           <div className={styles.heading}>
             <p className={styles.eyebrow}><MapPin size={16} aria-hidden="true" /> پیش از هماهنگی تحویل</p>
             <h1>جزئیات را یک‌بار وارد کن.</h1>
-            <p>درخواستت در ERPNext ثبت می‌شود؛ پرداخت آنلاین تا معرفی و راه‌اندازی درگاه انجام نمی‌شود.</p>
+            <p>قیمت نهایی از ERPNext خوانده می‌شود و بعد از ثبت سفارش، برای پرداخت امن به زرین‌پال می‌روی.</p>
           </div>
 
           {!ready ? <div className={styles.empty}>سبد خرید در حال بارگذاری است…</div> : !items.length ? (
@@ -279,11 +329,11 @@ export function CheckoutPage() {
                   <label className={styles.fullField}><span>توضیح برای اسموله <small>اختیاری</small></span><textarea rows={2} value={customer.note} onChange={(event) => updateCustomer("note", event.target.value)} placeholder="زمان مناسب یا نکتهٔ دیگری هست؟" /></label>
                 </div>
                 {savedAddresses.length === 0 && <p className={styles.pickupNotice}>برای استفاده از نشانی‌های ذخیره‌شده، <a href="/login?redirect-to=%2Fcheckout">وارد حساب شو</a> یا آن‌ها را در <a href="/account?tab=addresses">حساب کاربری</a> ثبت کن.</p>}
-                <div className={styles.privacyNotice}><ShieldCheck size={19} aria-hidden="true" /><p>با ثبت درخواست، نام، شماره تماس و جزئیات سفارش برای پیگیری در ERPNext فروشگاه اسموله ذخیره می‌شود. پرداخت آنلاین انجام نمی‌شود و سفارش بعد از بررسی فروشگاه قطعی خواهد شد. <a href="/privacy">جزئیات حریم خصوصی</a> و <a href="/terms">شرایط استفاده</a> را بخوان.</p></div>
+                <div className={styles.privacyNotice}><ShieldCheck size={19} aria-hidden="true" /><p>مبلغ نهایی در سمت سرور با نرخ‌های ERPNext دوباره محاسبه می‌شود. پرداخت فقط پس از تأیید زرین‌پال در ERPNext ثبت خواهد شد؛ بازگشت از درگاه به‌تنهایی تأیید پرداخت نیست. <a href="/privacy">جزئیات حریم خصوصی</a> و <a href="/terms">شرایط استفاده</a> را بخوان.</p></div>
                 {connected && !ordersEnabled && <p className={styles.pickupNotice} role="status">ثبت سفارش آنلاین هنوز فعال نشده است؛ مدیر فروشگاه باید کالاها، قیمت و روش دریافت را تکمیل کند.</p>}
                 {message && <p className={styles.error} role="alert">{message}</p>}
                 {submittedOrderId && <p role="status">درخواست {submittedOrderId} در ERPNext ثبت شد؛ شماره را برای پیگیری نگه دار.</p>}
-                <button className={styles.submitButton} type="submit" disabled={submitting || Boolean(submittedOrderId) || loading || !connected || !ordersEnabled || !deliveryMethodAvailable}>{submitting ? "در حال ثبت در فروشگاه…" : "ثبت درخواست سفارش"}<ArrowLeft size={18} aria-hidden="true" /></button>
+                <button className={styles.submitButton} type="submit" disabled={submitting || Boolean(submittedOrderId) || loading || !connected || !ordersEnabled || !deliveryMethodAvailable}>{submitting ? "در حال ثبت سفارش امن…" : "ثبت سفارش و پرداخت"}<ArrowLeft size={18} aria-hidden="true" /></button>
               </form>
 
               <aside className={styles.summary}>
@@ -298,8 +348,9 @@ export function CheckoutPage() {
                   const displayPrice = unitPrice === null || unitPrice === undefined ? null : Math.round(toDisplayTomans(unitPrice * item.quantity, currency));
                   return <div className={styles.summaryLine} key={item.id}><span>{dough.name} · {formatPersianNumber(item.sizeGrams)} گرم × {formatPersianNumber(item.quantity)}</span><strong>{displayPrice === null ? "نرخ مواد ناقص" : formatToman(displayPrice)}</strong></div>;
                 })}
-                <div className={styles.total}><span>{allItemsPriced ? "جمع اقلام" : "جمع اقلام قیمت‌دار"}</span><strong>{formatToman(readySubtotal + customSubtotal)}</strong></div>
-                <p>روش دریافت: {activeDeliveryMethod === "pickup" ? "تحویل حضوری" : "اسنپ‌پیک در کرج"}. هزینهٔ پیک در جمع بالا نیست و پیش از تأیید سفارش اعلام می‌شود؛ پرداخت آنلاین هنوز فعال نشده است.</p>
+                {deliveryFeeDisplay > 0 && <div className={styles.summaryLine}><span>هزینهٔ ثابت اسنپ‌پیک</span><strong>{formatToman(deliveryFeeDisplay)}</strong></div>}
+                <div className={styles.total}><span>{deliveryFeeDisplay > 0 ? "جمع قابل پرداخت" : allItemsPriced ? "جمع اقلام" : "جمع اقلام قیمت‌دار"}</span><strong>{formatToman(readySubtotal + customSubtotal + deliveryFeeDisplay)}</strong></div>
+                <p>روش دریافت: {activeDeliveryMethod === "pickup" ? "تحویل حضوری" : "اسنپ‌پیک در کرج"}. {activeDeliveryMethod === "delivery" && deliveryFeeCollection === "پرداخت جداگانه به اسنپ‌پیک" ? "هزینهٔ پیک جداگانه به اسنپ‌پیک پرداخت می‌شود." : activeDeliveryMethod === "delivery" && deliveryFeeDisplay ? "هزینهٔ ثابت پیک در پرداخت آنلاین لحاظ شده است." : "جمع نهایی از اطلاعات ERPNext محاسبه می‌شود."}</p>
                 <a href="/cart">ویرایش سبد خرید</a>
                 <a className={styles.deliveryLink} href="/pickup">جزئیات روش‌های دریافت</a>
               </aside>
