@@ -9,18 +9,34 @@ import { useStorefrontData } from "@/components/smule/StorefrontDataProvider";
 import { smuleAsset } from "@/lib/smule/assets";
 import { CommerceFooter } from "./CommerceFooter";
 import { CommerceHeader } from "./CommerceHeader";
-import { DOUGHS, getToppingCapacity, getToppingName, MAX_TOPPING_COUNT } from "@/lib/smule/cookie-builder";
-import { formatPersianNumber, formatToman, getSmuleProduct } from "@/lib/smule/products";
+import { calculateCookiePrice, DOUGHS, getToppingCapacity, getToppingName, MAX_TOPPING_COUNT } from "@/lib/smule/cookie-builder";
+import { formatPersianNumber, formatToman, getSmuleProduct, toDisplayTomans } from "@/lib/smule/products";
 import styles from "./CartPage.module.css";
 
 export function CartPage() {
   const { items, ready, itemCount, setQuantity, removeCookie } = useCookieCart();
-  const { products, connected } = useStorefrontData();
+  const { products, components, connected, currency } = useStorefrontData();
   const customItems = items.filter((item) => item.kind === "custom");
   const readySubtotal = items.reduce((total, item) => {
     if (item.kind !== "product") return total;
-    return total + (getSmuleProduct(item.productSlug, products)?.price ?? 0) * item.quantity;
+    const product = getSmuleProduct(item.productSlug, products);
+    return total + (product && !product.isSample ? product.price * item.quantity : 0);
   }, 0);
+  const customPrices = new Map(customItems.map((item) => [
+    item.id,
+    calculateCookiePrice(item.doughId, item.toppingIds, item.sizeGrams, components, currency),
+  ]));
+  const customSubtotal = customItems.reduce((total, item) => {
+    const unitPrice = customPrices.get(item.id);
+    return total + (unitPrice === null || unitPrice === undefined ? 0 : Math.round(toDisplayTomans(unitPrice, currency)) * item.quantity);
+  }, 0);
+  const unpricedCustomCount = [...customPrices.values()].filter((price) => price === null).length;
+  const pricedSubtotal = readySubtotal + customSubtotal;
+  const allItemsPriced = unpricedCustomCount === 0 && items.every((item) => {
+    if (item.kind === "custom") return customPrices.get(item.id) !== null;
+    const product = getSmuleProduct(item.productSlug, products);
+    return Boolean(product && !product.isSample && product.price > 0);
+  });
   const totalWeight = customItems.reduce((total, item) => total + item.nutrition.weight * item.quantity, 0);
   const totalCalories = customItems.reduce((total, item) => total + item.nutrition.calories * item.quantity, 0);
 
@@ -56,7 +72,7 @@ export function CartPage() {
                 {items.map((item) => {
                   if (item.kind === "product") {
                     const product = getSmuleProduct(item.productSlug, products);
-                    if (!product) return <article className={styles.line} key={item.id}><div className={styles.lineDetails}><div className={styles.lineTitleRow}><div><h2>این محصول دیگر در منوی فعال نیست</h2><p>قیمت و موجودی آن در ERPNext پیدا نشد؛ پیش از ثبت درخواست آن را از سبد بردار.</p></div><Button className={styles.removeButton} variant="ghost" size="icon" onClick={() => removeCookie(item.id)} aria-label="حذف محصول ناموجود از سبد"><Trash2 size={18} aria-hidden="true" /></Button></div></div></article>;
+                    if (!product || product.isSample) return <article className={styles.line} key={item.id}><div className={styles.lineDetails}><div className={styles.lineTitleRow}><div><h2>این محصول هنوز قیمت فروش تأییدشده ندارد</h2><p>قیمت یا دستور واقعی آن در ERPNext آماده نیست؛ برای جلوگیری از نمایش نرخ نمونه، آن را پیش از ثبت درخواست از سبد بردار.</p></div><Button className={styles.removeButton} variant="ghost" size="icon" onClick={() => removeCookie(item.id)} aria-label="حذف محصول ناموجود از سبد"><Trash2 size={18} aria-hidden="true" /></Button></div></div></article>;
                     return (
                       <article className={styles.line} key={item.id}>
                         <a className={styles.cookieMark} href={`/menu/product?slug=${encodeURIComponent(product.slug)}`} aria-label={`جزئیات ${product.name}`}>
@@ -84,6 +100,7 @@ export function CartPage() {
                   const dough = DOUGHS.find((option) => option.id === item.doughId) ?? DOUGHS[0];
                   const names = item.toppingIds.map(getToppingName);
                   const overCapacity = item.toppingIds.length > MAX_TOPPING_COUNT || item.nutrition.toppingWeight > getToppingCapacity(item.sizeGrams);
+                  const unitPrice = customPrices.get(item.id) ?? null;
                   return (
                     <article className={styles.line} key={item.id}>
                       <div className={styles.cookieMark} aria-hidden="true">
@@ -98,7 +115,7 @@ export function CartPage() {
                         {overCapacity && <p className={styles.capacityWarning}>این دستور از سقف فعلی سازنده بیشتر است؛ انتخاب ذخیره‌شده را نگه داشته‌ایم. ترکیب تازه را می‌توانی دوباره از سازنده تنظیم کنی.</p>}
                         <p className={styles.ingredients}><strong>ترکیب:</strong> {names.length ? names.join("، ") : "بدون تاپینگ"}</p>
                         <div className={styles.lineMeta}>
-                          <span>حدود {formatPersianNumber(item.nutrition.calories)} کیلوکالری برای هر کوکی</span>
+                          <span>{unitPrice === null ? "قیمت نهایی تا تنظیم نرخ مواد مشخص نیست" : formatToman(Math.round(toDisplayTomans(unitPrice * item.quantity, currency)))} · حدود {formatPersianNumber(item.nutrition.calories)} کیلوکالری برای هر کوکی</span>
                           <div className={styles.quantity} aria-label="تعداد کوکی از این ترکیب">
                             <button type="button" disabled={item.quantity <= 1} onClick={() => setQuantity(item.id, item.quantity - 1)} aria-label="کم‌کردن تعداد"><Minus size={15} aria-hidden="true" /></button>
                             <strong aria-live="polite">{formatPersianNumber(item.quantity)}</strong>
@@ -116,11 +133,16 @@ export function CartPage() {
                 <dl>
                   <div><dt>تعداد کل</dt><dd>{formatPersianNumber(itemCount)} عدد</dd></div>
                   <div><dt>کوکی‌های آماده</dt><dd>{formatToman(readySubtotal)}</dd></div>
-                  {customItems.length > 0 && <div><dt>کوکی‌های سفارشی</dt><dd>پس از تأیید قیمت‌گذاری می‌شوند</dd></div>}
+                  {customItems.length > 0 && <div><dt>کوکی‌های سفارشی</dt><dd>{unpricedCustomCount ? "نرخ کامل نیست" : formatToman(customSubtotal)}</dd></div>}
+                  {allItemsPriced && <div><dt>جمع اقلام</dt><dd>{formatToman(pricedSubtotal)}</dd></div>}
                   {totalWeight > 0 && <div><dt>وزن سفارشی تقریبی</dt><dd>{formatPersianNumber(totalWeight)} گرم</dd></div>}
                   {totalCalories > 0 && <div><dt>کالری سفارشی تقریبی</dt><dd>{formatPersianNumber(totalCalories)} kcal</dd></div>}
                 </dl>
-                <p className={styles.priceNotice}>{customItems.length ? "قیمت نهایی کوکی سفارشی پس از بررسی ترکیب توسط اسموله اعلام می‌شود." : connected ? "قیمت‌های قابل سفارش از Item Price فعال در ERPNext خوانده می‌شوند؛ هزینهٔ ارسال جداگانه هماهنگ می‌شود." : "اتصال ERPNext در دسترس نیست؛ قیمت‌های نمایشی صرفاً نمونه‌اند و سفارش ثبت نمی‌شود."}</p>
+                <p className={styles.priceNotice}>{customItems.length
+                  ? unpricedCustomCount
+                    ? "برای قیمت زنده، نرخ فروش هر گرم خمیر پایه و همهٔ افزودنی‌های انتخابی باید در لیست قیمت ERPNext ثبت شده باشد."
+                    : "قیمت کوکی سفارشی بر اساس وزن و نرخ‌های فروش فعال ERPNext محاسبه شده است؛ هزینهٔ اسنپ‌پیک جداگانه محاسبه می‌شود."
+                  : connected ? "قیمت‌های قابل سفارش از Item Price فعال در ERPNext خوانده می‌شوند؛ هزینهٔ اسنپ‌پیک جداگانه محاسبه می‌شود." : "اتصال ERPNext در دسترس نیست؛ قیمت‌های نمایشی صرفاً نمونه‌اند و سفارش ثبت نمی‌شود."}</p>
                 <a className={styles.continueButton} href="/checkout">ادامه و ثبت اطلاعات <ArrowLeft size={17} aria-hidden="true" /></a>
                 <a className={styles.buildMoreLink} href="/build-cookie">یا ساخت یک کوکی دلخواه</a>
                 <p className={styles.localNotice}>سبد روی همین مرورگر می‌ماند. اطلاعات سفارش و ارسال در مرحلهٔ بعد مرور می‌شود.</p>

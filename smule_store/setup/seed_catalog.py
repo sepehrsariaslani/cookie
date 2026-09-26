@@ -77,10 +77,16 @@ SAMPLE_CATALOG = [
 
 
 def _ensure_sample_item_masters():
-	if not frappe.db.exists("UOM", "Nos"):
-		frappe.get_doc({"doctype": "UOM", "uom_name": "Nos", "must_be_whole_number": 0}).insert(
-			ignore_permissions=True
-		)
+	for uom_name, symbol in (("Nos", ""), ("Gram", "g")):
+		if not frappe.db.exists("UOM", uom_name):
+			frappe.get_doc(
+				{
+					"doctype": "UOM",
+					"uom_name": uom_name,
+					"symbol": symbol,
+					"must_be_whole_number": 0,
+				}
+			).insert(ignore_permissions=True)
 
 	root_group = "All Item Groups"
 	if not frappe.db.exists("Item Group", root_group):
@@ -129,7 +135,7 @@ def seed_sample_catalog():
 			doc.item_code = f"SM-{row['kind'].upper()}-{row['slug'].upper()}"[:140]
 			doc.item_name = row["name"]
 			doc.item_group = item_group
-			doc.stock_uom = stock_uom
+			doc.stock_uom = "Gram" if row["kind"] in {"Dough", "Topping", "Flavor"} else stock_uom
 			doc.is_stock_item = 0
 			doc.is_sales_item = int(row["kind"] == "Product")
 			created += 1

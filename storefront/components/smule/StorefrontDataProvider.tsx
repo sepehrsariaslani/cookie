@@ -5,10 +5,11 @@ import { smuleAsset } from "@/lib/smule/assets";
 import { fetchStorefrontCatalog, type FrappeStorefrontCatalog } from "@/lib/smule/frappe-client";
 import { formatPersianNumber, SMULE_PRODUCTS, type SmuleProduct } from "@/lib/smule/products";
 
-type StorefrontComponent = {
+export type StorefrontComponent = {
   itemCode: string;
   id: string;
   slug: string;
+  kind: string;
   name: string;
   group: string;
   gramsPer50: number;
@@ -18,6 +19,8 @@ type StorefrontComponent = {
   visualGroup: string;
   visualColor: string;
   isSample: boolean;
+  pricePerGram: number | null;
+  priceCurrency: string | null;
 };
 
 type StorefrontData = {
@@ -67,6 +70,7 @@ function mapComponents(rows: FrappeStorefrontCatalog["components"]): StorefrontC
       itemCode: asString(row.itemCode),
       id: asString(row.id, asString(row.slug)),
       slug: asString(row.slug),
+      kind: asString(row.kind),
       name: asString(row.name),
       group: asString(row.group),
       gramsPer50: asNumber(row.gramsPer50),
@@ -82,6 +86,10 @@ function mapComponents(rows: FrappeStorefrontCatalog["components"]): StorefrontC
       visualGroup: asString(row.visualGroup, "crumb"),
       visualColor: asString(row.visualColor, "#c98955"),
       isSample: Boolean(row.isSample),
+      pricePerGram: typeof row.pricePerGram === "number" && Number.isFinite(row.pricePerGram) && row.pricePerGram > 0
+        ? row.pricePerGram
+        : null,
+      priceCurrency: typeof row.priceCurrency === "string" ? row.priceCurrency : null,
     };
   });
 }

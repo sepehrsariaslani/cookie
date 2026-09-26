@@ -12,6 +12,7 @@ import { useCookieCart } from "@/components/smule/CartProvider";
 import { CookieCanvas } from "@/components/smule/CookieStory";
 import {
   canAddTopping,
+  calculateCookiePrice,
   calculateCookieNutrition,
   COOKIE_GRAM_STEP,
   COOKIE_SIZES,
@@ -28,13 +29,15 @@ import {
   type DoughId,
   type ToppingId,
 } from "@/lib/smule/cookie-builder";
-import { formatPersianNumber } from "@/lib/smule/products";
+import { formatPersianNumber, formatToman, toDisplayTomans } from "@/lib/smule/products";
 import { CommerceHeader } from "./CommerceHeader";
 import { CommerceFooter } from "./CommerceFooter";
+import { useStorefrontData } from "./StorefrontDataProvider";
 import styles from "./CookieBuilder.module.css";
 
 export function CookieBuilder() {
   const { addCookie, itemCount, ready } = useCookieCart();
+  const { components, connected, currency } = useStorefrontData();
   const [dough, setDough] = useState<DoughId>("marble");
   const [sizeGrams, setSizeGrams] = useState(50);
   const [toppings, setToppings] = useState<ToppingId[]>([]);
@@ -45,6 +48,11 @@ export function CookieBuilder() {
   const toppingCapacity = getToppingCapacity(sizeGrams);
   const remainingCapacity = Math.max(0, Number((toppingCapacity - nutrition.toppingWeight).toFixed(1)));
   const hasBlockedToppings = TOPPINGS.some(({ id }) => !toppings.includes(id) && !canAddTopping(toppings, id, sizeGrams));
+  const cookiePrice = useMemo(
+    () => connected ? calculateCookiePrice(dough, toppings, sizeGrams, components, currency) : null,
+    [connected, components, currency, dough, toppings, sizeGrams],
+  );
+  const displayCookiePrice = cookiePrice === null ? null : Math.round(toDisplayTomans(cookiePrice, currency));
 
   function toggleTopping(id: ToppingId, enabled: boolean) {
     setToppings((current) => {
@@ -209,8 +217,8 @@ export function CookieBuilder() {
             <p className={styles.estimateDisclaimer}>کالری و مقدار مواد تخمینی‌اند و با دستور واقعی، وزن‌کشی و پخت تغییر می‌کنند. تخم‌مرغ جزو بعضی خمیرهاست، نه تاپینگ.</p>
 
             <div className={styles.formActions}>
-              <Button className={styles.buildButton} type="button" onClick={buildAndAddCookie} disabled={!ready}>
-                <ShoppingBasket size={18} aria-hidden="true" /> {ready ? "این کوکی را بساز و به سبد ببر" : "در حال آماده‌سازی سبد…"}
+              <Button className={styles.buildButton} type="button" onClick={buildAndAddCookie} disabled={!ready || cookiePrice === null}>
+                <ShoppingBasket size={18} aria-hidden="true" /> {!ready ? "در حال آماده‌سازی سبد…" : cookiePrice === null ? "قیمت این ترکیب هنوز آماده نیست" : "این کوکی را بساز و به سبد ببر"}
               </Button>
               <Button className={styles.resetButton} variant="ghost" type="button" onClick={resetBuilder}>از نو</Button>
             </div>
@@ -237,6 +245,12 @@ export function CookieBuilder() {
             </div>
 
             <div className={styles.calorieCard}>
+              <div className={styles.priceEstimate} role="status" aria-live="polite">
+                <div><span>قیمت این ترکیب</span><strong>{displayCookiePrice === null ? "در انتظار نرخ‌های فروشگاه" : formatToman(displayCookiePrice)}</strong></div>
+                <p>{displayCookiePrice === null
+                  ? "فروشگاه باید دستورهای واقعی را تأیید کند و نرخ هر گرم خمیر و افزودنی را در لیست قیمت ERPNext ثبت کند."
+                  : "محاسبهٔ زنده بر پایهٔ وزن خمیر، مقدار افزودنی‌ها و نرخ فعال ERPNext است؛ هزینهٔ اسنپ‌پیک جداگانه محاسبه می‌شود."}</p>
+              </div>
               <div className={styles.calorieTopline}><span>برآورد برای یک کوکی</span><strong>وزن نهایی حدود {formatPersianNumber(nutrition.weight)} گرم</strong></div>
               <div className={styles.calorieValue}><strong>{formatPersianNumber(nutrition.calories)}</strong><span>کیلوکالری</span></div>
               <dl className={styles.macroRow}>

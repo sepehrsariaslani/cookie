@@ -174,10 +174,43 @@ export type CookieNutrition = NutritionFacts & {
   toppingAmounts: Partial<Record<ToppingId, number>>;
 };
 
+export type CookiePriceComponent = {
+  kind: string;
+  slug: string;
+  pricePerGram: number | null;
+  priceCurrency: string | null;
+  isSample: boolean;
+};
+
 export function getToppingAmountForBase(toppingId: ToppingId, baseWeight: number) {
   const option = TOPPINGS.find((item) => item.id === toppingId);
   if (!option) return 0;
   return Number((option.gramsPer50 * baseWeight / 50).toFixed(1));
+}
+
+/** Calculate a display quote only from current, verified ERPNext selling rates. */
+export function calculateCookiePrice(
+  doughId: DoughId,
+  toppingIds: ToppingId[],
+  baseWeight: number,
+  components: CookiePriceComponent[],
+  currency: string | null,
+) {
+  if (!currency) return null;
+  const dough = components.find((component) => component.kind === "Dough" && component.slug === doughId);
+  if (!dough || dough.isSample || !dough.pricePerGram || dough.priceCurrency !== currency) return null;
+
+  let total = baseWeight * dough.pricePerGram;
+  for (const toppingId of toppingIds) {
+    const topping = components.find((component) =>
+      ["Topping", "Flavor"].includes(component.kind) && component.slug === toppingId,
+    );
+    if (!topping || topping.isSample || !topping.pricePerGram || topping.priceCurrency !== currency) return null;
+    total += getToppingAmountForBase(toppingId, baseWeight) * topping.pricePerGram;
+  }
+
+  if (!Number.isFinite(total) || total <= 0) return null;
+  return Math.round(total * 100) / 100;
 }
 
 export function getToppingCapacity(baseWeight: number) {

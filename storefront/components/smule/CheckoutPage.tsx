@@ -9,11 +9,11 @@ import { CommerceHeader } from "@/components/smule/CommerceHeader";
 import { useCookieCart } from "@/components/smule/CartProvider";
 import { useStorefrontData } from "@/components/smule/StorefrontDataProvider";
 import { CheckoutScheduleFields, type DeliveryCoordinates } from "@/components/smule/checkout/CheckoutScheduleFields";
-import { DOUGHS } from "@/lib/smule/cookie-builder";
+import { calculateCookiePrice, DOUGHS } from "@/lib/smule/cookie-builder";
 import { fetchCustomerAccount, type SmuleAccountAddress } from "@/lib/smule/customer-account";
 import { sendOrderRequest } from "@/lib/smule/frappe-client";
 import { getReadySubtotal } from "@/lib/smule/order-draft";
-import { formatPersianNumber, formatToman, getSmuleProduct } from "@/lib/smule/products";
+import { formatPersianNumber, formatToman, getSmuleProduct, toDisplayTomans } from "@/lib/smule/products";
 import styles from "./CheckoutPage.module.css";
 
 type CheckoutField = "name" | "phone" | "city" | "address" | "requestedForDate";
@@ -26,16 +26,20 @@ function normalizePhoneNumber(value: string) {
     .replace(/\D/g, "");
 }
 
+function normalizeDeliveryCity(value: string) {
+  return value.normalize("NFKC").replace(/ك/g, "ک").replace(/[يى]/g, "ی").replace(/\s+/g, " ").trim();
+}
+
 export function CheckoutPage() {
   const { items, ready, clearCart } = useCookieCart();
-  const { products, connected, loading, ordersEnabled, deliveryEnabled, pickupAddress, pickupHours } = useStorefrontData();
+  const { products, components, currency, connected, loading, ordersEnabled, deliveryEnabled, pickupAddress, pickupHours } = useStorefrontData();
   const [message, setMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<CheckoutErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [deliveryMethod, setDeliveryMethod] = useState<"pickup" | "delivery">("pickup");
   const [submittedOrderId, setSubmittedOrderId] = useState("");
   const [submittedTrackingHref, setSubmittedTrackingHref] = useState("");
-  const [customer, setCustomer] = useState({ name: "", phone: "", city: "", address: "", note: "" });
+  const [customer, setCustomer] = useState({ name: "", phone: "", city: "کرج", address: "", note: "" });
   const [scheduled, setScheduled] = useState(false);
   const [requestedDate, setRequestedDate] = useState("");
   const [requestedTime, setRequestedTime] = useState("");
@@ -47,19 +51,34 @@ export function CheckoutPage() {
   const activeDeliveryMethod = !canPickup && canDeliver ? "delivery" : deliveryMethod;
   const deliveryMethodAvailable = activeDeliveryMethod === "pickup" ? canPickup : canDeliver;
   const readySubtotal = getReadySubtotal(items, products);
+  const customPrices = new Map(items.flatMap((item) => item.kind === "custom"
+    ? [[item.id, calculateCookiePrice(item.doughId, item.toppingIds, item.sizeGrams, components, currency)] as const]
+    : []));
+  const customSubtotal = items.reduce((total, item) => {
+    if (item.kind !== "custom") return total;
+    const unitPrice = customPrices.get(item.id);
+    return total + (unitPrice === null || unitPrice === undefined ? 0 : Math.round(toDisplayTomans(unitPrice, currency)) * item.quantity);
+  }, 0);
+  const unpricedCustomCount = [...customPrices.values()].filter((price) => price === null).length;
+  const allItemsPriced = unpricedCustomCount === 0 && items.every((item) => {
+    if (item.kind === "custom") return customPrices.get(item.id) !== null;
+    const product = getSmuleProduct(item.productSlug, products);
+    return Boolean(product && !product.isSample && product.price > 0);
+  });
 
   useEffect(() => {
     const controller = new AbortController();
     fetchCustomerAccount(controller.signal)
       .then((account) => {
         if (!account.authenticated) return;
-        setSavedAddresses(account.addresses ?? []);
+        const karajAddresses = (account.addresses ?? []).filter((address) => normalizeDeliveryCity(address.city) === "کرج");
+        setSavedAddresses(karajAddresses);
         setCustomer((current) => ({
           ...current,
           name: current.name || account.profile?.fullName || "",
           phone: current.phone || account.profile?.phone || "",
         }));
-        const preferred = (account.addresses ?? []).find((address) => address.is_primary_address) ?? account.addresses?.[0];
+        const preferred = karajAddresses.find((address) => address.is_primary_address) ?? karajAddresses[0];
         if (preferred) {
           setSelectedAddress(preferred.name);
           setCustomer((current) => ({
@@ -95,7 +114,7 @@ export function CheckoutPage() {
     if (customer.name.trim().length < 2) errors.name = "نام را با دست‌کم دو نویسه وارد کن.";
     const phoneDigits = normalizePhoneNumber(customer.phone);
     if (phoneDigits.length < 10 || phoneDigits.length > 15) errors.phone = "شمارهٔ تماس را با ۱۰ تا ۱۵ رقم وارد کن.";
-    if (activeDeliveryMethod === "delivery" && customer.city.trim().length < 2) errors.city = "نام شهر را وارد کن.";
+    if (activeDeliveryMethod === "delivery" && normalizeDeliveryCity(customer.city) !== "کرج") errors.city = "ارسال اسموله فعلاً فقط در کرج انجام می‌شود.";
     if (activeDeliveryMethod === "delivery" && customer.address.trim().length < 8) errors.address = "نشانی کامل را وارد کن (حداقل ۸ نویسه).";
     if (scheduled && !requestedDate) errors.requestedForDate = "برای ثبت زمان دلخواه، تاریخ را انتخاب کن.";
     setFieldErrors(errors);
@@ -112,6 +131,10 @@ export function CheckoutPage() {
     if (!items.length || submitting || !validateCustomer()) return;
     if (!connected || !ordersEnabled || !deliveryMethodAvailable) {
       setMessage("ثبت سفارش هنوز از طرف فروشگاه فعال نشده است. می‌توانی سبدت را نگه داری و بعداً دوباره تلاش کنی.");
+      return;
+    }
+    if (!allItemsPriced) {
+      setMessage("قیمت همهٔ اقلام هنوز در ERPNext کامل و تأیید نشده است؛ نرخ مواد یا کالای ناموجود را بررسی کن.");
       return;
     }
     setSubmitting(true);
@@ -203,7 +226,7 @@ export function CheckoutPage() {
                   </label>
                   <label className={`${styles.deliveryOption} ${activeDeliveryMethod === "delivery" ? styles.deliveryOptionSelected : ""}`}>
                     <input type="radio" name="deliveryMethod" value="delivery" checked={activeDeliveryMethod === "delivery"} disabled={!canDeliver} onChange={() => setDeliveryMethod("delivery")} />
-                    <span><strong>ارسال</strong><small>{canDeliver ? "هزینه و محدوده پس از بررسی درخواست هماهنگ می‌شود" : "ارسال در تنظیمات اسموله فعال نشده"}</small></span>
+                    <span><strong>ارسال با اسنپ‌پیک</strong><small>{canDeliver ? "فقط در کرج · هزینه براساس نرخ پیک، پیش از تأیید نهایی اعلام می‌شود" : "ارسال در تنظیمات اسموله فعال نشده"}</small></span>
                   </label>
                 </fieldset>
                 {Object.keys(fieldErrors).length > 0 && <div className={styles.errorSummary} role="alert">
@@ -222,12 +245,12 @@ export function CheckoutPage() {
                         city: selected.city || "",
                         address: [selected.address_line1, selected.address_line2].filter(Boolean).join("، "),
                       }));
-                      else setCustomer((current) => ({ ...current, city: "", address: "" }));
+                      else setCustomer((current) => ({ ...current, city: "کرج", address: "" }));
                     }}>
                       <option value="">واردکردن نشانی دیگر</option>
                       {savedAddresses.map((address) => <option key={address.name} value={address.name}>{address.address_title || address.city} · {address.city}</option>)}
                     </select></label>}
-                    <label><span>شهر <b>*</b></span><input id="checkout-city" autoComplete="address-level2" required aria-invalid={Boolean(fieldErrors.city)} aria-describedby={fieldErrors.city ? "checkout-city-error" : undefined} value={customer.city} onChange={(event) => updateCustomer("city", event.target.value)} placeholder="نام شهر" />{fieldErrors.city && <small id="checkout-city-error" className={styles.fieldError}>{fieldErrors.city}</small>}</label>
+                    <label><span>محدودهٔ ارسال</span><input id="checkout-city" autoComplete="address-level2" value="کرج" readOnly aria-describedby={fieldErrors.city ? "checkout-city-error" : undefined} />{fieldErrors.city && <small id="checkout-city-error" className={styles.fieldError}>{fieldErrors.city}</small>}</label>
                     <label className={styles.fullField}><span>نشانی کامل <b>*</b></span><textarea id="checkout-address" autoComplete="street-address" required aria-invalid={Boolean(fieldErrors.address)} aria-describedby={fieldErrors.address ? "checkout-address-error" : undefined} rows={3} value={customer.address} onChange={(event) => updateCustomer("address", event.target.value)} placeholder="خیابان، کوچه، پلاک و واحد" />{fieldErrors.address && <small id="checkout-address-error" className={styles.fieldError}>{fieldErrors.address}</small>}</label>
                   </>}
                   {activeDeliveryMethod === "pickup" && <p className={`${styles.fullField} ${styles.pickupNotice}`}>{pickupAddress ? `نشانی تحویل حضوری: ${pickupAddress}${pickupHours ? ` · ${pickupHours}` : ""}` : "تا وقتی نشانی تحویل در تنظیمات فروشگاه ثبت نشده باشد، امکان ثبت درخواست تحویل حضوری نیست."}</p>}
@@ -268,13 +291,15 @@ export function CheckoutPage() {
                 {items.map((item) => {
                   if (item.kind === "product") {
                     const product = getSmuleProduct(item.productSlug, products);
-                    return product ? <div className={styles.summaryLine} key={item.id}><span>{product.name} × {formatPersianNumber(item.quantity)}</span><strong>{formatToman(product.price * item.quantity)}</strong></div> : null;
+                    return product && !product.isSample ? <div className={styles.summaryLine} key={item.id}><span>{product.name} × {formatPersianNumber(item.quantity)}</span><strong>{formatToman(product.price * item.quantity)}</strong></div> : <div className={styles.summaryLine} key={item.id}><span>محصول بدون قیمت تأییدشده</span><strong>نامشخص</strong></div>;
                   }
                   const dough = DOUGHS.find((option) => option.id === item.doughId) ?? DOUGHS[0];
-                  return <div className={styles.summaryLine} key={item.id}><span>{dough.name} · {formatPersianNumber(item.sizeGrams)} گرم × {formatPersianNumber(item.quantity)}</span><strong>قیمت پس از بررسی</strong></div>;
+                  const unitPrice = customPrices.get(item.id);
+                  const displayPrice = unitPrice === null || unitPrice === undefined ? null : Math.round(toDisplayTomans(unitPrice * item.quantity, currency));
+                  return <div className={styles.summaryLine} key={item.id}><span>{dough.name} · {formatPersianNumber(item.sizeGrams)} گرم × {formatPersianNumber(item.quantity)}</span><strong>{displayPrice === null ? "نرخ مواد ناقص" : formatToman(displayPrice)}</strong></div>;
                 })}
-                <div className={styles.total}><span>جمعِ قیمت‌های مشخص</span><strong>{formatToman(readySubtotal)}</strong></div>
-                <p>روش دریافت: {activeDeliveryMethod === "pickup" ? "تحویل حضوری" : "ارسال"}. هزینهٔ ارسال، قیمت کوکی سفارشی و پرداخت هنوز تنظیم نشده است.</p>
+                <div className={styles.total}><span>{allItemsPriced ? "جمع اقلام" : "جمع اقلام قیمت‌دار"}</span><strong>{formatToman(readySubtotal + customSubtotal)}</strong></div>
+                <p>روش دریافت: {activeDeliveryMethod === "pickup" ? "تحویل حضوری" : "اسنپ‌پیک در کرج"}. هزینهٔ پیک در جمع بالا نیست و پیش از تأیید سفارش اعلام می‌شود؛ پرداخت آنلاین هنوز فعال نشده است.</p>
                 <a href="/cart">ویرایش سبد خرید</a>
                 <a className={styles.deliveryLink} href="/pickup">جزئیات روش‌های دریافت</a>
               </aside>

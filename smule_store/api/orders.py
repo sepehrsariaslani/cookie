@@ -9,7 +9,9 @@ from frappe.utils import add_days, today
 
 from smule_store.api.storefront import _get_prices
 from smule_store.domain.cookie import calculate_custom_cookie
+from smule_store.domain.delivery import normalize_delivery_city
 from smule_store.domain.order_tracking import create_tracking_token, hash_tracking_token
+from smule_store.domain.pricing import calculate_custom_cookie_price
 from smule_store.domain.scheduling import normalize_coordinates, normalize_requested_schedule
 
 MAX_ORDER_LINES = 30
@@ -127,7 +129,7 @@ def _read_product_line(line, price_list, price_cache):
 	}
 
 
-def _read_custom_line(line):
+def _read_custom_line(line, price_list):
 	dough_slug = line.get("doughId") or line.get("doughSlug")
 	dough = _get_store_item(dough_slug, "Dough")
 	selected = line.get("toppingIds") or line.get("toppingSlugs") or []
@@ -144,6 +146,26 @@ def _read_custom_line(line):
 	except (TypeError, ValueError) as error:
 		_fail(str(error))
 
+	component_prices = _get_prices([dough.name, *(item.name for item in toppings)], price_list, uom="Gram")
+	dough_price = component_prices.get(dough.name)
+	if not dough_price or dough_price.price_list_rate <= 0 or dough.smule_recipe_is_sample:
+		_fail("قیمت فروش هر گرم خمیر را در لیست قیمت ERPNext تنظیم کنید.")
+	topping_rates_per_gram = {}
+	for item in toppings:
+		price = component_prices.get(item.name)
+		if not price or price.price_list_rate <= 0 or item.smule_recipe_is_sample:
+			_fail("قیمت فروش هر گرم خمیر و همهٔ افزودنی‌ها را در لیست قیمت ERPNext تنظیم کنید.")
+		topping_rates_per_gram[item.smule_slug] = price.price_list_rate
+	try:
+		pricing = calculate_custom_cookie_price(
+			calculation["base_weight_grams"],
+			dough_price.price_list_rate,
+			calculation["topping_amounts"],
+			topping_rates_per_gram,
+		)
+	except ValueError as error:
+		_fail(str(error))
+
 	dough_name = dough.smule_display_name_fa or dough.item_name
 	topping_names = [item.smule_display_name_fa or item.item_name for item in toppings]
 	summary = f"{dough_name} · بیس {calculation['base_weight_grams']:g} گرم"
@@ -156,14 +178,20 @@ def _read_custom_line(line):
 			{"itemCode": item.name, "slug": item.smule_slug, "name": item.smule_display_name_fa or item.item_name}
 			for item in toppings
 		],
+		"pricing": {
+			"method": "ERPNext Item Price per Gram",
+			"currency": frappe.db.get_value("Price List", price_list, "currency") if price_list else None,
+			"unitPrice": pricing["unit_price"],
+			"breakdown": pricing["breakdown"],
+		},
 		**calculation,
 	}
 	return {
 		"line_type": "کوکی سفارشی",
 		"title_fa": summary,
 		"qty": _normalize_quantity(line.get("quantity", 1)),
-		"unit_price": 0,
-		"quote_required": 1,
+		"unit_price": pricing["unit_price"],
+		"quote_required": 0,
 		"recipe_summary": summary,
 		"recipe_json": json.dumps(recipe, ensure_ascii=False, separators=(",", ":")),
 		"base_weight_grams": calculation["base_weight_grams"],
@@ -220,7 +248,10 @@ def create_order_request(order=None):
 	else:
 		if not settings.delivery_enabled:
 			_fail("ارسال سفارش هنوز توسط فروشگاه فعال نشده است.")
-		city = str(customer_data.get("city", "")).strip()
+		try:
+			city = normalize_delivery_city(customer_data.get("city"))
+		except ValueError as error:
+			_fail(str(error))
 		address = str(customer_data.get("address", "")).strip()
 		if len(city) < 2 or len(address) < 8:
 			_fail("برای ارسال، شهر و نشانی کامل لازم است.")
@@ -268,7 +299,7 @@ def create_order_request(order=None):
 		if line.get("kind") == "product" or line.get("productSlug") or line.get("slug"):
 			request_items.append(_read_product_line(line, price_list, price_cache))
 		elif line.get("kind") == "custom" or line.get("doughId") or line.get("doughSlug"):
-			request_items.append(_read_custom_line(line))
+			request_items.append(_read_custom_line(line, price_list))
 		else:
 			_fail("نوع یکی از اقلام سبد پشتیبانی نمی‌شود.")
 

@@ -42,20 +42,45 @@ def _split_fa_list(value):
 	]
 
 
-def _get_prices(item_codes, price_list):
+def _get_prices(item_codes, price_list, uom=None):
 	if not item_codes or not price_list:
 		return {}
+	filters = {"item_code": ["in", item_codes], "price_list": price_list, "selling": 1}
+	if uom:
+		filters["uom"] = uom
+	else:
+		stock_uoms = {
+			row.name: row.stock_uom
+			for row in frappe.get_all(
+				"Item", filters={"name": ["in", item_codes]}, fields=["name", "stock_uom"]
+			)
+		}
 
 	rows = frappe.get_all(
 		"Item Price",
-		filters={"item_code": ["in", item_codes], "price_list": price_list, "selling": 1},
-		fields=["item_code", "price_list_rate", "currency", "valid_from", "valid_upto", "modified"],
+		filters=filters,
+		fields=[
+			"item_code",
+			"price_list_rate",
+			"currency",
+			"uom",
+			"customer",
+			"supplier",
+			"batch_no",
+			"valid_from",
+			"valid_upto",
+			"modified",
+		],
 		order_by="modified desc",
 	)
 
 	current_date = getdate(today())
 	prices = {}
 	for row in rows:
+		if row.customer or row.supplier or row.batch_no:
+			continue
+		if not uom and row.uom != stock_uoms.get(row.item_code):
+			continue
 		if row.valid_from and getdate(row.valid_from) > current_date:
 			continue
 		if row.valid_upto and getdate(row.valid_upto) < current_date:
@@ -78,7 +103,12 @@ def get_catalog():
 	settings = frappe.get_single("Smule Store Settings")
 	price_list = settings.selling_price_list or frappe.db.get_single_value("Selling Settings", "selling_price_list")
 	product_codes = [item.name for item in items if item.smule_storefront_type == "Product" and item.is_sales_item]
+	component_codes = [
+		item.name for item in items if item.smule_storefront_type in {"Dough", "Topping", "Flavor"}
+	]
 	prices = _get_prices(product_codes, price_list)
+	component_prices = _get_prices(component_codes, price_list, uom="Gram")
+	price_currency = frappe.db.get_value("Price List", price_list, "currency") if price_list else None
 
 	products = []
 	components = []
@@ -108,6 +138,7 @@ def get_catalog():
 			"visualGroup": item.smule_visual_group or "crumb",
 			"visualColor": item.smule_visual_color or "#c98955",
 			"isSample": bool(item.smule_recipe_is_sample),
+			"kind": item.smule_storefront_type,
 		}
 
 		if item.smule_storefront_type == "Product" and item.is_sales_item:
@@ -126,12 +157,19 @@ def get_catalog():
 		elif item.smule_storefront_type in {"Dough", "Topping", "Flavor"}:
 			entry["id"] = entry["slug"]
 			entry["name"] = entry["name"]
+			component_price = component_prices.get(item.name)
+			entry["pricePerGram"] = (
+				component_price.price_list_rate
+				if component_price and component_price.price_list_rate > 0 and not item.smule_recipe_is_sample
+				else None
+			)
+			entry["priceCurrency"] = component_price.currency if entry["pricePerGram"] else None
 			components.append(entry)
 
 	return {
 		"products": products,
 		"components": components,
-		"currency": next((prices[item].currency for item in prices if item in product_codes), None),
+		"currency": price_currency,
 		"priceList": price_list,
 		"ordersEnabled": bool(settings.online_orders_enabled),
 		"deliveryEnabled": bool(settings.delivery_enabled),

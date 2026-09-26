@@ -103,6 +103,10 @@
 .cookieName span { min-height: 1.4em; color: var(--ink-soft); font-size: .76rem; line-height: 1.6; }
 .previewEstimate { margin: .15rem 0 0; color: var(--ink-soft); font-size: .72rem; text-align: center; }
 .calorieCard { padding: .95rem 1rem; border: 1px solid var(--line); border-radius: 1.2rem; background: var(--surface-card); }
+.priceEstimate { display: grid; gap: .35rem; margin: 0 0 .8rem; padding: .75rem .85rem; border: 1px solid color-mix(in srgb, var(--gold-ink) 24%, transparent); border-radius: .9rem; background: color-mix(in srgb, var(--butter) 22%, white); }
+.priceEstimate div { display: flex; align-items: center; justify-content: space-between; gap: .65rem; color: var(--ink-soft); font-size: .8rem; }
+.priceEstimate strong { color: var(--burgundy); font-size: 1.05rem; font-weight: 800; }
+.priceEstimate p { margin: 0; color: var(--ink-soft); font-size: .72rem; line-height: 1.65; }
 .calorieTopline { display: flex; align-items: center; justify-content: space-between; color: var(--ink-soft); font-size: .82rem; }
 .calorieTopline strong { color: var(--burgundy); font-size: .84rem; }
 .calorieValue { display: flex; align-items: baseline; gap: .4rem; margin: .05rem 0 .5rem; color: var(--burgundy); }

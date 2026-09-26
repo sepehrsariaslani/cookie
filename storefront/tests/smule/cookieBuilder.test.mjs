@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   canAddTopping,
+  calculateCookiePrice,
   calculateCookieNutrition,
   DOUGHS,
   getToppingAmountForBase,
@@ -81,4 +82,24 @@ test("base dough weight is clamped to the supported range", () => {
   assert.equal(tooSmall.weight, 30);
   assert.equal(tooLarge.baseWeight, 150);
   assert.equal(tooLarge.weight, 150);
+});
+
+test("custom cookie price uses the selected grams and matching ERPNext rates", () => {
+  const components = [
+    { kind: "Dough", slug: "oat", pricePerGram: 250, priceCurrency: "IRR", isSample: false },
+    { kind: "Topping", slug: "banana", pricePerGram: 800, priceCurrency: "IRR", isSample: false },
+    { kind: "Topping", slug: "walnut", pricePerGram: 1200, priceCurrency: "IRR", isSample: false },
+  ];
+
+  assert.equal(calculateCookiePrice("oat", ["banana", "walnut"], 50, components, "IRR"), 22_100);
+});
+
+test("pricing distinguishes same-slug dough and topping and blocks missing or sample rates", () => {
+  const sameSlug = [
+    { kind: "Dough", slug: "almond", pricePerGram: 10, priceCurrency: "IRR", isSample: false },
+    { kind: "Topping", slug: "almond", pricePerGram: 100, priceCurrency: "IRR", isSample: false },
+  ];
+  assert.equal(calculateCookiePrice("almond", ["almond"], 30, sameSlug, "IRR"), 540);
+  assert.equal(calculateCookiePrice("oat", [], 50, sameSlug, "IRR"), null);
+  assert.equal(calculateCookiePrice("almond", [], 50, sameSlug, null), null);
 });

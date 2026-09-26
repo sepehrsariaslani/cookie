@@ -40,7 +40,7 @@ export function getReadySubtotal(items: DraftCartLine[], products: SmuleProduct[
     if (item.kind !== "product") return total;
     const product = getSmuleProduct(item.productSlug, products);
     const quantity = normalizeQuantity(item.quantity);
-    return product && quantity ? total + product.price * quantity : total;
+    return product && !product.isSample && quantity ? total + product.price * quantity : total;
   }, 0);
 }
 
@@ -54,7 +54,7 @@ export function buildLocalOrderDraft({ items, customer, deliveryMethod, requeste
 
     if (item.kind === "product") {
       const product = getSmuleProduct(item.productSlug, products);
-      if (!product) return null;
+      if (!product || product.isSample) return null;
       lines.push({
         kind: "product",
         productSlug: product.slug,

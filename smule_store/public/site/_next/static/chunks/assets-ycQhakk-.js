@@ -1,0 +1,1 @@
+var e=`/assets/smule_store/site`;function t(t){return/^(?:https?:)?\/\//i.test(t)||/^(?:\/files\/|\/private\/files\/|\/assets\/)/.test(t)?t:`${e}${t.startsWith(`/`)?t:`/${t}`}`}export{t};
