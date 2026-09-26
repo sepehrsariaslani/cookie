@@ -36,7 +36,7 @@ def _item(slug, name, kind, *, description="", ingredients="", allergens="", gro
 
 
 # Values copied from the existing prototype are intentionally marked as samples.
-# Product prices and product nutrition are left unset; add verified Item Prices later.
+# These recipes are explicitly sample-only; live prices require approved BOMs and material costs.
 SAMPLE_CATALOG = [
 	_item("vanilla", "وانیلی کلاسیک", "Dough", description="آرد گندم سفید؛ بافت ریز و کره‌ای", ingredients="آرد گندم، کره، تخم‌مرغ، وانیل", allergens="گلوتن، لبنیات، تخم‌مرغ", nutrition=(486, 6, 64, 21, 30), color="#fff3d8"),
 	_item("cocoa", "کاکائویی خالص", "Dough", description="تمام خمیر، شکلاتی", ingredients="آرد گندم، کره، تخم‌مرغ، کاکائو", allergens="گلوتن، لبنیات، تخم‌مرغ", nutrition=(498, 7, 62, 24, 32), visual_group="chocolate", color="#74412e"),

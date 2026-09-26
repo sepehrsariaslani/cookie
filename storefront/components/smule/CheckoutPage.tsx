@@ -43,7 +43,7 @@ function getCheckoutIdempotencyKey() {
 
 export function CheckoutPage() {
   const { items, ready, clearCart } = useCookieCart();
-  const { products, components, currency, connected, loading, ordersEnabled, deliveryEnabled, deliveryFee, deliveryFeeCollection, pickupAddress, pickupHours } = useStorefrontData();
+  const { products, components, currency, connected, loading, ordersEnabled, deliveryEnabled, deliveryFee, deliveryFeeCollection, pickupAddress, pickupHours, pricingMarkupPercent, customCookieFixedCost, priceRoundingIncrement } = useStorefrontData();
   const [message, setMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<CheckoutErrors>({});
   const [submitting, setSubmitting] = useState(false);
@@ -63,7 +63,7 @@ export function CheckoutPage() {
   const deliveryMethodAvailable = activeDeliveryMethod === "pickup" ? canPickup : canDeliver;
   const readySubtotal = getReadySubtotal(items, products);
   const customPrices = new Map(items.flatMap((item) => item.kind === "custom"
-    ? [[item.id, calculateCookiePrice(item.doughId, item.toppingIds, item.sizeGrams, components, currency)] as const]
+    ? [[item.id, calculateCookiePrice(item.doughId, item.toppingIds, item.sizeGrams, components, currency, pricingMarkupPercent, customCookieFixedCost, priceRoundingIncrement)] as const]
     : []));
   const customSubtotal = items.reduce((total, item) => {
     if (item.kind !== "custom") return total;

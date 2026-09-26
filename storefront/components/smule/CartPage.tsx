@@ -15,7 +15,7 @@ import styles from "./CartPage.module.css";
 
 export function CartPage() {
   const { items, ready, itemCount, setQuantity, removeCookie } = useCookieCart();
-  const { products, components, connected, currency } = useStorefrontData();
+  const { products, components, connected, currency, pricingMarkupPercent, customCookieFixedCost, priceRoundingIncrement } = useStorefrontData();
   const customItems = items.filter((item) => item.kind === "custom");
   const readySubtotal = items.reduce((total, item) => {
     if (item.kind !== "product") return total;
@@ -24,7 +24,7 @@ export function CartPage() {
   }, 0);
   const customPrices = new Map(customItems.map((item) => [
     item.id,
-    calculateCookiePrice(item.doughId, item.toppingIds, item.sizeGrams, components, currency),
+    calculateCookiePrice(item.doughId, item.toppingIds, item.sizeGrams, components, currency, pricingMarkupPercent, customCookieFixedCost, priceRoundingIncrement),
   ]));
   const customSubtotal = customItems.reduce((total, item) => {
     const unitPrice = customPrices.get(item.id);
@@ -85,7 +85,7 @@ export function CartPage() {
                           </div>
                           <p className={styles.ingredients}><strong>ترکیبات:</strong> {product.ingredients.join("، ")}</p>
                           <div className={styles.lineMeta}>
-                            <strong className={styles.linePrice}>{formatToman(item.unitPrice * item.quantity)}</strong>
+                            <strong className={styles.linePrice}>{formatToman(product.price * item.quantity)}</strong>
                             <div className={styles.quantity} aria-label={`تعداد ${product.name}`}>
                               <button type="button" disabled={item.quantity <= 1} onClick={() => setQuantity(item.id, item.quantity - 1)} aria-label="کم‌کردن تعداد"><Minus size={15} aria-hidden="true" /></button>
                               <strong aria-live="polite">{formatPersianNumber(item.quantity)}</strong>
@@ -140,9 +140,9 @@ export function CartPage() {
                 </dl>
                 <p className={styles.priceNotice}>{customItems.length
                   ? unpricedCustomCount
-                    ? "برای قیمت زنده، نرخ فروش هر گرم خمیر پایه و همهٔ افزودنی‌های انتخابی باید در لیست قیمت ERPNext ثبت شده باشد."
-                    : "قیمت کوکی سفارشی بر اساس وزن و نرخ‌های فروش فعال ERPNext محاسبه شده است؛ هزینهٔ اسنپ‌پیک جداگانه محاسبه می‌شود."
-                  : connected ? "قیمت‌های قابل سفارش از Item Price فعال در ERPNext خوانده می‌شوند؛ هزینهٔ اسنپ‌پیک جداگانه محاسبه می‌شود." : "اتصال ERPNext در دسترس نیست؛ قیمت‌های نمایشی صرفاً نمونه‌اند و سفارش ثبت نمی‌شود."}</p>
+                    ? "برای قیمت زنده، بهای خرید هر گرم خمیر و افزودنی‌های انتخابی و تنظیم قانون قیمت‌گذاری باید در ERPNext کامل باشد."
+                    : "قیمت سفارشی از بهای مواد و هزینهٔ ثابت، با درصد افزوده و گردکردن رو به بالا محاسبه می‌شود؛ هزینهٔ پیک جداست."
+                  : connected ? "قیمت کوکی آماده بر اساس بهای BOM تأییدشده، درصد افزوده و گام گردکردن ERPNext محاسبه می‌شود." : "اتصال ERPNext در دسترس نیست؛ قیمت‌های نمایشی صرفاً نمونه‌اند و سفارش ثبت نمی‌شود."}</p>
                 <a className={styles.continueButton} href="/checkout">ادامه و ثبت اطلاعات <ArrowLeft size={17} aria-hidden="true" /></a>
                 <a className={styles.buildMoreLink} href="/build-cookie">یا ساخت یک کوکی دلخواه</a>
                 <p className={styles.localNotice}>سبد روی همین مرورگر می‌ماند. اطلاعات سفارش و ارسال در مرحلهٔ بعد مرور می‌شود.</p>

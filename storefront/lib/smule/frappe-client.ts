@@ -10,6 +10,10 @@ export type FrappeStorefrontCatalog = {
   pickupAddress: string;
   pickupHours: string;
   paymentsEnabled?: boolean;
+  pricingMarkupPercent?: number | null;
+  customCookieFixedCost?: number | null;
+  priceRoundingIncrement?: number;
+  customPricingReady?: boolean;
 };
 
 export type FrappeOrderResult = {

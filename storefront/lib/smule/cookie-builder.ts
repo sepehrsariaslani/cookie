@@ -177,8 +177,8 @@ export type CookieNutrition = NutritionFacts & {
 export type CookiePriceComponent = {
   kind: string;
   slug: string;
-  pricePerGram: number | null;
-  priceCurrency: string | null;
+  costPerGram: number | null;
+  costCurrency: string | null;
   isSample: boolean;
 };
 
@@ -188,29 +188,33 @@ export function getToppingAmountForBase(toppingId: ToppingId, baseWeight: number
   return Number((option.gramsPer50 * baseWeight / 50).toFixed(1));
 }
 
-/** Calculate a display quote only from current, verified ERPNext selling rates. */
+/** Calculate a preview from the same verified material-cost rule enforced by Frappe. */
 export function calculateCookiePrice(
   doughId: DoughId,
   toppingIds: ToppingId[],
   baseWeight: number,
   components: CookiePriceComponent[],
   currency: string | null,
+  markupPercent: number | null,
+  fixedCost: number | null,
+  roundingIncrement: number,
 ) {
-  if (!currency) return null;
+  if (!currency || markupPercent === null || markupPercent <= 0 || markupPercent > 1000 || fixedCost === null || fixedCost < 0 || roundingIncrement <= 0) return null;
   const dough = components.find((component) => component.kind === "Dough" && component.slug === doughId);
-  if (!dough || dough.isSample || !dough.pricePerGram || dough.priceCurrency !== currency) return null;
+  if (!dough || dough.isSample || !dough.costPerGram || dough.costCurrency !== currency) return null;
 
-  let total = baseWeight * dough.pricePerGram;
+  let materialCost = baseWeight * dough.costPerGram;
   for (const toppingId of toppingIds) {
     const topping = components.find((component) =>
       ["Topping", "Flavor"].includes(component.kind) && component.slug === toppingId,
     );
-    if (!topping || topping.isSample || !topping.pricePerGram || topping.priceCurrency !== currency) return null;
-    total += getToppingAmountForBase(toppingId, baseWeight) * topping.pricePerGram;
+    if (!topping || topping.isSample || !topping.costPerGram || topping.costCurrency !== currency) return null;
+    materialCost += getToppingAmountForBase(toppingId, baseWeight) * topping.costPerGram;
   }
 
-  if (!Number.isFinite(total) || total <= 0) return null;
-  return Math.round(total * 100) / 100;
+  const calculatedPrice = (materialCost + fixedCost) * (1 + markupPercent / 100);
+  if (!Number.isFinite(calculatedPrice) || calculatedPrice <= 0) return null;
+  return Math.ceil((calculatedPrice - 1e-8) / roundingIncrement) * roundingIncrement;
 }
 
 export function getToppingCapacity(baseWeight: number) {

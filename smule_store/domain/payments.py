@@ -22,12 +22,32 @@ def get_live_payment_configuration(settings, throw=False):
 		return fail("شناسهٔ پذیرندهٔ زرین‌پال در تنظیمات امن نشده است.")
 	if not settings.company or not settings.selling_price_list:
 		return fail("شرکت و لیست قیمت فروشگاه کامل نیست.")
+	if not settings.automatic_pricing_enabled or not settings.material_cost_price_list:
+		return fail("قانون قیمت‌گذاری خودکار و لیست بهای مواد را در تنظیمات فروشگاه کامل کنید.")
+	if (
+		settings.markup_percentage is None
+		or settings.markup_percentage <= 0
+		or settings.markup_percentage > 1000
+		or not settings.price_rounding_increment
+		or settings.price_rounding_increment <= 0
+		or settings.custom_cookie_fixed_cost is None
+		or settings.custom_cookie_fixed_cost < 0
+	):
+		return fail("درصد افزوده، هزینهٔ ثابت کوکی و گام گردکردن را در قانون قیمت‌گذاری تنظیم کنید.")
+	selling_price_list = frappe.db.get_value(
+		"Price List", settings.selling_price_list, ["currency", "selling"], as_dict=True
+	)
+	material_price_list = frappe.db.get_value(
+		"Price List", settings.material_cost_price_list, ["currency", "buying"], as_dict=True
+	)
+	if not selling_price_list or not selling_price_list.selling or selling_price_list.currency != "IRR":
+		return fail("لیست قیمت فروش باید فعال و با ارز ریال (IRR) باشد.")
+	if not material_price_list or not material_price_list.buying or material_price_list.currency != "IRR":
+		return fail("لیست بهای مواد باید از نوع خرید و با ارز ریال (IRR) باشد.")
 	if not settings.mode_of_payment or not settings.payment_account:
 		return fail("روش پرداخت و حساب دریافت وجه ERPNext کامل نیست.")
 	if not settings.pickup_address and not settings.delivery_enabled:
 		return fail("روش تحویل سفارش هنوز توسط فروشگاه تنظیم نشده است.")
-	if frappe.db.get_value("Price List", settings.selling_price_list, "currency") != "IRR":
-		return fail("ارز لیست قیمت باید برای زرین‌پال ریال (IRR) باشد.")
 	if frappe.get_cached_value("Company", settings.company, "default_currency") != "IRR":
 		return fail("ارز پیش‌فرض شرکت باید برای تسویهٔ زرین‌پال ریال (IRR) باشد.")
 	account = frappe.db.get_value(

@@ -11,7 +11,7 @@ export function ProductHero({ product }: { product: SmuleProduct }) {
 
       <div className={styles.purchaseLine}>
         <div>
-          <span className={styles.priceLabel}>قیمت نمونه</span>
+          <span className={styles.priceLabel}>{product.isSample ? "قیمت نمایشی" : "قیمت فروش"}</span>
           <strong className={styles.price}>{formatToman(product.price)}</strong>
         </div>
         <span className={styles.serving}>{product.serving}</span>

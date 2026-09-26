@@ -84,22 +84,23 @@ test("base dough weight is clamped to the supported range", () => {
   assert.equal(tooLarge.weight, 150);
 });
 
-test("custom cookie price uses the selected grams and matching ERPNext rates", () => {
+test("custom-cookie price applies material cost, fixed cost, markup, then rounds upward", () => {
   const components = [
-    { kind: "Dough", slug: "oat", pricePerGram: 250, priceCurrency: "IRR", isSample: false },
-    { kind: "Topping", slug: "banana", pricePerGram: 800, priceCurrency: "IRR", isSample: false },
-    { kind: "Topping", slug: "walnut", pricePerGram: 1200, priceCurrency: "IRR", isSample: false },
+    { kind: "Dough", slug: "oat", costPerGram: 250, costCurrency: "IRR", isSample: false },
+    { kind: "Topping", slug: "banana", costPerGram: 800, costCurrency: "IRR", isSample: false },
+    { kind: "Topping", slug: "walnut", costPerGram: 1200, costCurrency: "IRR", isSample: false },
   ];
 
-  assert.equal(calculateCookiePrice("oat", ["banana", "walnut"], 50, components, "IRR"), 22_100);
+  assert.equal(calculateCookiePrice("oat", ["banana", "walnut"], 50, components, "IRR", 40, 3_000, 1_000), 36_000);
 });
 
 test("pricing distinguishes same-slug dough and topping and blocks missing or sample rates", () => {
   const sameSlug = [
-    { kind: "Dough", slug: "almond", pricePerGram: 10, priceCurrency: "IRR", isSample: false },
-    { kind: "Topping", slug: "almond", pricePerGram: 100, priceCurrency: "IRR", isSample: false },
+    { kind: "Dough", slug: "almond", costPerGram: 10, costCurrency: "IRR", isSample: false },
+    { kind: "Topping", slug: "almond", costPerGram: 100, costCurrency: "IRR", isSample: false },
   ];
-  assert.equal(calculateCookiePrice("almond", ["almond"], 30, sameSlug, "IRR"), 540);
-  assert.equal(calculateCookiePrice("oat", [], 50, sameSlug, "IRR"), null);
-  assert.equal(calculateCookiePrice("almond", [], 50, sameSlug, null), null);
+  assert.equal(calculateCookiePrice("almond", ["almond"], 30, sameSlug, "IRR", 20, 0, 100), 700);
+  assert.equal(calculateCookiePrice("oat", [], 50, sameSlug, "IRR", 20, 0, 100), null);
+  assert.equal(calculateCookiePrice("almond", [], 50, sameSlug, null, 20, 0, 100), null);
+  assert.equal(calculateCookiePrice("almond", [], 50, sameSlug, "IRR", null, 0, 100), null);
 });

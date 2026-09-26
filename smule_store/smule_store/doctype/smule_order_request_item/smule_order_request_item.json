@@ -11,6 +11,8 @@
         {"fieldname": "qty", "fieldtype": "Int", "label": "تعداد", "default": "1", "reqd": 1, "in_list_view": 1},
         {"fieldname": "unit_price", "fieldtype": "Currency", "label": "قیمت واحد", "default": "0", "in_list_view": 1},
         {"fieldname": "quote_required", "fieldtype": "Check", "label": "نیازمند قیمت‌گذاری", "default": "0", "in_list_view": 1},
+        {"fieldname": "pricing_section", "fieldtype": "Section Break", "label": "مبنای قیمت‌گذاری"},
+        {"fieldname": "pricing_snapshot", "fieldtype": "Long Text", "label": "گزارش محاسبهٔ قیمت"},
         {"fieldname": "recipe_section", "fieldtype": "Section Break", "label": "ترکیب سفارشی", "depends_on": "eval:doc.line_type=='کوکی سفارشی'"},
         {"fieldname": "recipe_summary", "fieldtype": "Small Text", "label": "خلاصهٔ ترکیب", "depends_on": "eval:doc.line_type=='کوکی سفارشی'"},
         {"fieldname": "recipe_json", "fieldtype": "Long Text", "label": "دادهٔ ترکیب", "depends_on": "eval:doc.line_type=='کوکی سفارشی'"},
@@ -18,7 +20,7 @@
         {"fieldname": "final_weight_grams", "fieldtype": "Float", "label": "وزن نهایی تقریبی (گرم)", "depends_on": "eval:doc.line_type=='کوکی سفارشی'"},
         {"fieldname": "estimated_calories", "fieldtype": "Float", "label": "کالری تقریبی", "depends_on": "eval:doc.line_type=='کوکی سفارشی'"}
     ],
-    "field_order": ["line_type", "item_code", "title_fa", "qty", "unit_price", "quote_required", "recipe_section", "recipe_summary", "recipe_json", "base_weight_grams", "final_weight_grams", "estimated_calories"],
+    "field_order": ["line_type", "item_code", "title_fa", "qty", "unit_price", "quote_required", "pricing_section", "pricing_snapshot", "recipe_section", "recipe_summary", "recipe_json", "base_weight_grams", "final_weight_grams", "estimated_calories"],
     "permissions": [],
     "sort_field": "idx",
     "sort_order": "ASC",

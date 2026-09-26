@@ -19,8 +19,8 @@ export type StorefrontComponent = {
   visualGroup: string;
   visualColor: string;
   isSample: boolean;
-  pricePerGram: number | null;
-  priceCurrency: string | null;
+  costPerGram: number | null;
+  costCurrency: string | null;
 };
 
 type StorefrontData = {
@@ -36,6 +36,10 @@ type StorefrontData = {
   pickupAddress: string;
   pickupHours: string;
   currency: string | null;
+  pricingMarkupPercent: number | null;
+  customCookieFixedCost: number | null;
+  priceRoundingIncrement: number;
+  customPricingReady: boolean;
 };
 
 const previewState: StorefrontData = {
@@ -51,6 +55,10 @@ const previewState: StorefrontData = {
   pickupAddress: "",
   pickupHours: "",
   currency: null,
+  pricingMarkupPercent: null,
+  customCookieFixedCost: null,
+  priceRoundingIncrement: 0,
+  customPricingReady: false,
 };
 
 const StorefrontContext = createContext<StorefrontData>(previewState);
@@ -90,10 +98,10 @@ function mapComponents(rows: FrappeStorefrontCatalog["components"]): StorefrontC
       visualGroup: asString(row.visualGroup, "crumb"),
       visualColor: asString(row.visualColor, "#c98955"),
       isSample: Boolean(row.isSample),
-      pricePerGram: typeof row.pricePerGram === "number" && Number.isFinite(row.pricePerGram) && row.pricePerGram > 0
-        ? row.pricePerGram
+      costPerGram: typeof row.costPerGram === "number" && Number.isFinite(row.costPerGram) && row.costPerGram > 0
+        ? row.costPerGram
         : null,
-      priceCurrency: typeof row.priceCurrency === "string" ? row.priceCurrency : null,
+      costCurrency: typeof row.costCurrency === "string" ? row.costCurrency : null,
     };
   });
 }
@@ -168,6 +176,14 @@ function mapCatalog(catalog: FrappeStorefrontCatalog): StorefrontData {
     pickupAddress: asString(catalog.pickupAddress),
     pickupHours: asString(catalog.pickupHours),
     currency,
+    pricingMarkupPercent: typeof catalog.pricingMarkupPercent === "number" && Number.isFinite(catalog.pricingMarkupPercent)
+      ? catalog.pricingMarkupPercent
+      : null,
+    customCookieFixedCost: typeof catalog.customCookieFixedCost === "number" && Number.isFinite(catalog.customCookieFixedCost)
+      ? catalog.customCookieFixedCost
+      : null,
+    priceRoundingIncrement: asNumber(catalog.priceRoundingIncrement),
+    customPricingReady: Boolean(catalog.customPricingReady),
   };
 }
 

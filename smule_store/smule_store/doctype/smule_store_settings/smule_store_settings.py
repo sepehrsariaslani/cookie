@@ -11,6 +11,20 @@ class SmuleStoreSettings(Document):
 			frappe.throw("برای فعال‌کردن سفارش آنلاین، شرکت فروشنده را انتخاب کنید.")
 		if not self.selling_price_list:
 			frappe.throw("برای فعال‌کردن سفارش آنلاین، لیست قیمت فروش را انتخاب کنید.")
+		if not self.automatic_pricing_enabled:
+			frappe.throw("برای فعال‌کردن سفارش آنلاین، قانون قیمت‌گذاری خودکار را تأیید کنید.")
+		if not self.material_cost_price_list:
+			frappe.throw("لیست بهای خرید مواد را برای قیمت‌گذاری خودکار انتخاب کنید.")
+		if self.markup_percentage is None or self.markup_percentage <= 0 or self.markup_percentage > 1000:
+			frappe.throw("درصد افزوده روی هزینه را بین بیشتر از صفر تا ۱۰۰۰ وارد کنید.")
+		if not self.price_rounding_increment or self.price_rounding_increment <= 0:
+			frappe.throw("گام گردکردن قیمت باید بیشتر از صفر باشد.")
+		if self.custom_cookie_fixed_cost is None or self.custom_cookie_fixed_cost < 0:
+			frappe.throw("هزینهٔ ثابت ساخت و بسته‌بندی نمی‌تواند خالی یا منفی باشد.")
+		if not self.custom_cookie_item or not frappe.db.get_value(
+			"Item", {"name": self.custom_cookie_item, "disabled": 0, "is_sales_item": 1}, "name"
+		):
+			frappe.throw("کالای پایهٔ کوکی سفارشی را به‌عنوان کالای فعال و قابل فروش انتخاب کنید.")
 		if not self.pickup_address and not self.delivery_enabled:
 			frappe.throw("نشانی تحویل حضوری را ثبت کنید یا ارسال را فعال کنید.")
 		if self.delivery_fee is not None and self.delivery_fee < 0:
@@ -27,9 +41,16 @@ class SmuleStoreSettings(Document):
 			frappe.throw("برای دریافت سفارش آنلاین، زرین‌پال را پس از تکمیل تنظیمات فعال کنید.")
 		if not self.mode_of_payment or not self.payment_account:
 			frappe.throw("روش پرداخت و حساب بانکی دریافت وجه را در ERPNext تنظیم کنید.")
-		price_currency = frappe.db.get_value("Price List", self.selling_price_list, "currency")
-		if price_currency != "IRR":
+		selling_price_list = frappe.db.get_value(
+			"Price List", self.selling_price_list, ["currency", "selling"], as_dict=True
+		)
+		if not selling_price_list or not selling_price_list.selling or selling_price_list.currency != "IRR":
 			frappe.throw("برای اتصال زرین‌پال، ارز لیست قیمت باید ریال (IRR) باشد.")
+		material_price_list = frappe.db.get_value(
+			"Price List", self.material_cost_price_list, ["currency", "buying"], as_dict=True
+		)
+		if not material_price_list or not material_price_list.buying or material_price_list.currency != "IRR":
+			frappe.throw("لیست بهای مواد باید از نوع خرید و با ارز ریال (IRR) باشد.")
 		if frappe.get_cached_value("Company", self.company, "default_currency") != "IRR":
 			frappe.throw("برای اتصال زرین‌پال، ارز پیش‌فرض شرکت باید ریال (IRR) باشد.")
 		account = frappe.db.get_value(

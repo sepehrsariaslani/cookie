@@ -7,7 +7,7 @@ import re
 import frappe
 from frappe.utils import add_days, today
 
-from smule_store.api.storefront import _get_prices
+from smule_store.api.storefront import _get_prices, _get_ready_product_price
 from smule_store.domain.cookie import calculate_custom_cookie
 from smule_store.domain.delivery import normalize_delivery_city
 from smule_store.domain.order_tracking import create_tracking_token, hash_tracking_token
@@ -133,29 +133,41 @@ def _normalize_quantity(value):
 	return quantity
 
 
-def _read_product_line(line, price_list, price_cache):
+def _read_product_line(line, settings):
 	slug = line.get("productSlug") or line.get("slug")
 	item = _get_store_item(slug, "Product")
 	if not frappe.db.get_value("Item", item.name, "is_sales_item"):
 		_fail("یکی از کوکی‌های آماده برای فروش تنظیم نشده است.")
 	if item.smule_recipe_is_sample:
 		_fail("اطلاعات یکی از کوکی‌های آماده هنوز در آشپزخانه تأیید نشده است.")
-	price = price_cache.get(item.name)
+	price = _get_ready_product_price(item.name, settings)
 	if not price:
-		price = _get_prices([item.name], price_list).get(item.name)
-	if not price or price.price_list_rate <= 0:
-		_fail("قیمت یکی از کوکی‌های آماده هنوز در ERPNext تنظیم نشده است.")
+		_fail("برای یکی از کوکی‌های آماده، BOM پیش‌فرضِ فعال و بهای ساخت معتبر در ERPNext پیدا نشد.")
+	price_snapshot = {
+		"method": "ERPNext submitted default BOM cost plus configured markup",
+		"bom": price["bom_name"],
+		"bomQuantity": price["bom_quantity"],
+		"bomTotalCost": price["bom_total_cost"],
+		"unitCost": price["material_cost"],
+		"markupPercent": price["markup_percent"],
+		"markupAmount": price["markup_amount"],
+		"roundingIncrement": price["rounding_increment"],
+		"roundingAmount": price["rounding_amount"],
+		"unitPrice": price["unit_price"],
+		"currency": frappe.db.get_value("Price List", settings.selling_price_list, "currency"),
+	}
 	return {
 		"line_type": "کوکی آماده",
 		"item_code": item.name,
 		"title_fa": item.smule_display_name_fa or item.item_name,
 		"qty": _normalize_quantity(line.get("quantity", 1)),
-		"unit_price": price.price_list_rate,
+		"unit_price": price["unit_price"],
 		"quote_required": 0,
+		"pricing_snapshot": json.dumps(price_snapshot, ensure_ascii=False, separators=(",", ":")),
 	}
 
 
-def _read_custom_line(line, price_list):
+def _read_custom_line(line, settings):
 	dough_slug = line.get("doughId") or line.get("doughSlug")
 	dough = _get_store_item(dough_slug, "Dough")
 	selected = line.get("toppingIds") or line.get("toppingSlugs") or []
@@ -172,15 +184,20 @@ def _read_custom_line(line, price_list):
 	except (TypeError, ValueError) as error:
 		_fail(str(error))
 
-	component_prices = _get_prices([dough.name, *(item.name for item in toppings)], price_list, uom="Gram")
+	component_prices = _get_prices(
+		[dough.name, *(item.name for item in toppings)],
+		settings.material_cost_price_list,
+		uom="Gram",
+		selling=False,
+	)
 	dough_price = component_prices.get(dough.name)
 	if not dough_price or dough_price.price_list_rate <= 0 or dough.smule_recipe_is_sample:
-		_fail("قیمت فروش هر گرم خمیر را در لیست قیمت ERPNext تنظیم کنید.")
+		_fail("بهای خرید هر گرم خمیر را در لیست بهای مواد ERPNext تنظیم کنید.")
 	topping_rates_per_gram = {}
 	for item in toppings:
 		price = component_prices.get(item.name)
 		if not price or price.price_list_rate <= 0 or item.smule_recipe_is_sample:
-			_fail("قیمت فروش هر گرم خمیر و همهٔ افزودنی‌ها را در لیست قیمت ERPNext تنظیم کنید.")
+			_fail("بهای خرید هر گرم خمیر و همهٔ افزودنی‌ها را در لیست بهای مواد ERPNext تنظیم کنید.")
 		topping_rates_per_gram[item.smule_slug] = price.price_list_rate
 	try:
 		pricing = calculate_custom_cookie_price(
@@ -188,6 +205,9 @@ def _read_custom_line(line, price_list):
 			dough_price.price_list_rate,
 			calculation["topping_amounts"],
 			topping_rates_per_gram,
+			settings.markup_percentage,
+			settings.price_rounding_increment,
+			settings.custom_cookie_fixed_cost or 0,
 		)
 	except ValueError as error:
 		_fail(str(error))
@@ -205,9 +225,15 @@ def _read_custom_line(line, price_list):
 			for item in toppings
 		],
 		"pricing": {
-			"method": "ERPNext Item Price per Gram",
-			"currency": frappe.db.get_value("Price List", price_list, "currency") if price_list else None,
+			"method": "ERPNext Buying Item Price per Gram plus configured markup",
+			"currency": frappe.db.get_value("Price List", settings.selling_price_list, "currency") if settings.selling_price_list else None,
 			"unitPrice": pricing["unit_price"],
+			"materialCost": pricing["material_cost"],
+			"fixedCost": pricing["fixed_cost"],
+			"markupPercent": pricing["markup_percent"],
+			"markupAmount": pricing["markup_amount"],
+			"roundingIncrement": pricing["rounding_increment"],
+			"roundingAmount": pricing["rounding_amount"],
 			"breakdown": pricing["breakdown"],
 		},
 		**calculation,
@@ -218,6 +244,7 @@ def _read_custom_line(line, price_list):
 		"qty": _normalize_quantity(line.get("quantity", 1)),
 		"unit_price": pricing["unit_price"],
 		"quote_required": 0,
+		"pricing_snapshot": json.dumps(recipe["pricing"], ensure_ascii=False, separators=(",", ":")),
 		"recipe_summary": summary,
 		"recipe_json": json.dumps(recipe, ensure_ascii=False, separators=(",", ":")),
 		"base_weight_grams": calculation["base_weight_grams"],
@@ -310,34 +337,15 @@ def create_order_request(order=None):
 	if not isinstance(lines, list) or not lines or len(lines) > MAX_ORDER_LINES:
 		_fail("سبد سفارش خالی یا بزرگ‌تر از حد مجاز است.")
 	price_list = settings.selling_price_list or frappe.db.get_single_value("Selling Settings", "selling_price_list")
-	price_cache = _get_prices(
-		[
-			item.name
-			for line in lines
-			if isinstance(line, dict) and (line.get("productSlug") or line.get("slug"))
-			for item in frappe.get_all(
-				"Item",
-				filters={
-					"disabled": 0,
-					"smule_enabled_in_storefront": 1,
-					"smule_slug": line.get("productSlug") or line.get("slug"),
-					"smule_storefront_type": "Product",
-				},
-				fields=["name"],
-				limit_page_length=1,
-			)
-		],
-		price_list,
-	)
 
 	request_items = []
 	for line in lines:
 		if not isinstance(line, dict):
 			_fail("یکی از اقلام سبد معتبر نیست.")
 		if line.get("kind") == "product" or line.get("productSlug") or line.get("slug"):
-			request_items.append(_read_product_line(line, price_list, price_cache))
+			request_items.append(_read_product_line(line, settings))
 		elif line.get("kind") == "custom" or line.get("doughId") or line.get("doughSlug"):
-			request_items.append(_read_custom_line(line, price_list))
+			request_items.append(_read_custom_line(line, settings))
 		else:
 			_fail("نوع یکی از اقلام سبد پشتیبانی نمی‌شود.")
 

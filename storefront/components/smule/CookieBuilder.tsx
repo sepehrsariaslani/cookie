@@ -37,7 +37,7 @@ import styles from "./CookieBuilder.module.css";
 
 export function CookieBuilder() {
   const { addCookie, itemCount, ready } = useCookieCart();
-  const { components, connected, currency } = useStorefrontData();
+  const { components, connected, currency, pricingMarkupPercent, customCookieFixedCost, priceRoundingIncrement } = useStorefrontData();
   const [dough, setDough] = useState<DoughId>("marble");
   const [sizeGrams, setSizeGrams] = useState(50);
   const [toppings, setToppings] = useState<ToppingId[]>([]);
@@ -49,8 +49,10 @@ export function CookieBuilder() {
   const remainingCapacity = Math.max(0, Number((toppingCapacity - nutrition.toppingWeight).toFixed(1)));
   const hasBlockedToppings = TOPPINGS.some(({ id }) => !toppings.includes(id) && !canAddTopping(toppings, id, sizeGrams));
   const cookiePrice = useMemo(
-    () => connected ? calculateCookiePrice(dough, toppings, sizeGrams, components, currency) : null,
-    [connected, components, currency, dough, toppings, sizeGrams],
+    () => connected
+      ? calculateCookiePrice(dough, toppings, sizeGrams, components, currency, pricingMarkupPercent, customCookieFixedCost, priceRoundingIncrement)
+      : null,
+    [connected, components, currency, customCookieFixedCost, dough, priceRoundingIncrement, pricingMarkupPercent, sizeGrams, toppings],
   );
   const displayCookiePrice = cookiePrice === null ? null : Math.round(toDisplayTomans(cookiePrice, currency));
 
@@ -248,8 +250,8 @@ export function CookieBuilder() {
               <div className={styles.priceEstimate} role="status" aria-live="polite">
                 <div><span>قیمت این ترکیب</span><strong>{displayCookiePrice === null ? "در انتظار نرخ‌های فروشگاه" : formatToman(displayCookiePrice)}</strong></div>
                 <p>{displayCookiePrice === null
-                  ? "فروشگاه باید دستورهای واقعی را تأیید کند و نرخ هر گرم خمیر و افزودنی را در لیست قیمت ERPNext ثبت کند."
-                  : "محاسبهٔ زنده بر پایهٔ وزن خمیر، مقدار افزودنی‌ها و نرخ فعال ERPNext است؛ هزینهٔ اسنپ‌پیک جداگانه محاسبه می‌شود."}</p>
+                  ? "برای نمایش مبلغ دقیق، فروشگاه باید بهای واقعی خمیر و افزودنی‌ها، درصد افزوده و دستور تأییدشده را در ERPNext تکمیل کند."
+                  : "بهای مواد + هزینهٔ ثابت ساخت و بسته‌بندی، سپس درصد افزودهٔ فروشگاه و گردکردن رو به بالا؛ هزینهٔ ارسال جداست."}</p>
               </div>
               <div className={styles.calorieTopline}><span>برآورد برای یک کوکی</span><strong>وزن نهایی حدود {formatPersianNumber(nutrition.weight)} گرم</strong></div>
               <div className={styles.calorieValue}><strong>{formatPersianNumber(nutrition.calories)}</strong><span>کیلوکالری</span></div>
