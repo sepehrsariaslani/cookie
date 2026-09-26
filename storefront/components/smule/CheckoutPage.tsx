@@ -66,21 +66,31 @@ export function CheckoutPage() {
   const customPrices = new Map(items.flatMap((item) => item.kind === "custom"
     ? [[item.id, calculateCookiePrice(item.doughId, item.toppingIds, item.sizeGrams, components, currency, pricingMarkupPercent, customCookieFixedCost, priceRoundingIncrement)] as const]
     : []));
-  const customSubtotal = items.reduce((total, item) => {
-    if (item.kind !== "custom") return total;
-    const unitPrice = customPrices.get(item.id);
-    return total + (unitPrice === null || unitPrice === undefined ? 0 : Math.round(toDisplayTomans(unitPrice, currency)) * item.quantity);
-  }, 0);
   const deliveryFeeDisplay = activeDeliveryMethod === "delivery"
     && deliveryFeeCollection === "افزودن به مبلغ زرین‌پال"
     ? Math.round(toDisplayTomans(deliveryFee, currency))
     : 0;
   const unpricedCustomCount = [...customPrices.values()].filter((price) => price === null).length;
-  const allItemsPriced = unpricedCustomCount === 0 && items.every((item) => {
-    if (item.kind === "custom") return customPrices.get(item.id) !== null;
-    const product = getSmuleProduct(item.productSlug, products);
-    return Boolean(product && !product.isSample && product.price > 0);
-  });
+  const customSubtotal = unpricedCustomCount
+    ? null
+    : items.reduce((total, item) => {
+      if (item.kind !== "custom") return total;
+      const unitPrice = customPrices.get(item.id);
+      return total + (unitPrice === null || unitPrice === undefined ? 0 : Math.round(toDisplayTomans(unitPrice, currency)) * item.quantity);
+    }, 0);
+  const allItemsPriced = readySubtotal !== null && customSubtotal !== null;
+  const checkoutCanProceed = !loading && connected && ordersEnabled && deliveryMethodAvailable && allItemsPriced;
+  const checkoutBlockMessage = loading
+    ? "در حال بررسی قیمت و روش‌های دریافت فروشگاه…"
+    : !connected
+      ? "اتصال فروشگاه برقرار نیست؛ اطلاعات تماس را وارد نکن. سبدت حفظ می‌شود و بعداً می‌توانی دوباره بررسی کنی."
+      : !allItemsPriced
+        ? "قیمت نهایی همهٔ اقلام هنوز از ERPNext تأیید نشده است؛ فعلاً اطلاعات تماس لازم نیست."
+        : !ordersEnabled
+          ? "پذیرش سفارش آنلاین هنوز در تنظیمات اسموله فعال نشده است؛ سبدت را نگه دار و بعداً دوباره بررسی کن."
+          : !deliveryMethodAvailable
+            ? "هنوز روش دریافت قابل انتخابی ثبت نشده است؛ فروشگاه باید نشانی تحویل یا ارسال را تنظیم کند."
+            : "";
 
   useEffect(() => {
     const controller = new AbortController();
@@ -144,15 +154,12 @@ export function CheckoutPage() {
 
   async function createDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!items.length || submitting || !validateCustomer()) return;
-    if (!connected || !ordersEnabled || !deliveryMethodAvailable) {
-      setMessage("ثبت سفارش هنوز از طرف فروشگاه فعال نشده است. می‌توانی سبدت را نگه داری و بعداً دوباره تلاش کنی.");
+    if (!items.length || submitting) return;
+    if (!checkoutCanProceed) {
+      setMessage(checkoutBlockMessage || "این سفارش هنوز آمادهٔ ثبت نیست.");
       return;
     }
-    if (!allItemsPriced) {
-      setMessage("قیمت همهٔ اقلام هنوز در ERPNext کامل و تأیید نشده است؛ نرخ مواد یا کالای ناموجود را بررسی کن.");
-      return;
-    }
+    if (!validateCustomer()) return;
     setSubmitting(true);
     setMessage("");
 
@@ -259,6 +266,8 @@ export function CheckoutPage() {
               <form className={styles.formCard} onSubmit={createDraft} noValidate>
                 <h2>روش دریافت سفارش</h2>
                 <p className={styles.formIntro}>تحویل حضوری را انتخاب کن یا نشانی ارسال را وارد کن.</p>
+                {!checkoutCanProceed && <p className={styles.checkoutBlockMessage} role="status">{checkoutBlockMessage}</p>}
+                <fieldset className={styles.checkoutControls} disabled={!checkoutCanProceed}>
                 <fieldset className={styles.deliveryOptions}>
                   <legend className={styles.srOnly}>روش دریافت</legend>
                   <label className={`${styles.deliveryOption} ${activeDeliveryMethod === "pickup" ? styles.deliveryOptionSelected : ""}`}>
@@ -270,7 +279,7 @@ export function CheckoutPage() {
                   </label>
                   <label className={`${styles.deliveryOption} ${activeDeliveryMethod === "delivery" ? styles.deliveryOptionSelected : ""}`}>
                     <input type="radio" name="deliveryMethod" value="delivery" checked={activeDeliveryMethod === "delivery"} disabled={!canDeliver} onChange={() => setDeliveryMethod("delivery")} />
-                    <span><strong>ارسال با اسنپ‌پیک</strong><small>{canDeliver ? "فقط در کرج · هزینه براساس نرخ پیک، پیش از تأیید نهایی اعلام می‌شود" : "ارسال در تنظیمات اسموله فعال نشده"}</small></span>
+                    <span><strong>ارسال با اسنپ‌پیک</strong><small>{canDeliver ? "فقط در کرج · هزینه براساس نرخ پیک، پیش از تأیید نهایی اعلام می‌شود" : "فقط کرج · تنظیم هزینه و روش ارسال هنوز کامل نیست"}</small></span>
                   </label>
                 </fieldset>
                 {Object.keys(fieldErrors).length > 0 && <div className={styles.errorSummary} role="alert">
@@ -327,7 +336,8 @@ export function CheckoutPage() {
                 {connected && !ordersEnabled && <p className={styles.pickupNotice} role="status">ثبت سفارش آنلاین هنوز فعال نشده است؛ مدیر فروشگاه باید کالاها، قیمت و روش دریافت را تکمیل کند.</p>}
                 {message && <p className={styles.error} role="alert">{message}</p>}
                 {submittedOrderId && <p role="status">درخواست {submittedOrderId} در ERPNext ثبت شد؛ شماره را برای پیگیری نگه دار.</p>}
-                <button className={styles.submitButton} type="submit" disabled={submitting || Boolean(submittedOrderId) || loading || !connected || !ordersEnabled || !deliveryMethodAvailable}>{submitting ? "در حال ثبت سفارش امن…" : "ثبت سفارش و پرداخت"}<ArrowLeft size={18} aria-hidden="true" /></button>
+                <button className={styles.submitButton} type="submit" disabled={submitting || Boolean(submittedOrderId) || !checkoutCanProceed}>{submitting ? "در حال ثبت سفارش امن…" : "ثبت سفارش و پرداخت"}<ArrowLeft size={18} aria-hidden="true" /></button>
+                </fieldset>
               </form>
 
               <aside className={styles.summary}>
@@ -335,7 +345,9 @@ export function CheckoutPage() {
                 {items.map((item) => {
                   if (item.kind === "product") {
                     const product = getSmuleProduct(item.productSlug, products);
-                    return product && !product.isSample ? <div className={styles.summaryLine} key={item.id}><span>{product.name} × {formatPersianNumber(item.quantity)}</span><strong>{formatToman(product.price * item.quantity)}</strong></div> : <div className={styles.summaryLine} key={item.id}><span>محصول بدون قیمت تأییدشده</span><strong>نامشخص</strong></div>;
+                    return product && !product.isSample && Number.isFinite(product.price) && product.price > 0
+                      ? <div className={styles.summaryLine} key={item.id}><span>{product.name} × {formatPersianNumber(item.quantity)}</span><strong>{formatToman(product.price * item.quantity)}</strong></div>
+                      : <div className={styles.summaryLine} key={item.id}><span>{product ? `${product.name} · بدون قیمت تأییدشده` : "محصول ناموجود در منوی فعلی"}</span><strong>نامشخص</strong></div>;
                   }
                   const dough = DOUGHS.find((option) => option.id === item.doughId) ?? DOUGHS[0];
                   const unitPrice = customPrices.get(item.id);
@@ -343,7 +355,7 @@ export function CheckoutPage() {
                   return <div className={styles.summaryLine} key={item.id}><span>{dough.name} · {formatPersianNumber(item.sizeGrams)} گرم × {formatPersianNumber(item.quantity)}</span><strong>{displayPrice === null ? "نرخ مواد ناقص" : formatToman(displayPrice)}</strong></div>;
                 })}
                 {deliveryFeeDisplay > 0 && <div className={styles.summaryLine}><span>هزینهٔ ثابت اسنپ‌پیک</span><strong>{formatToman(deliveryFeeDisplay)}</strong></div>}
-                <div className={styles.total}><span>{deliveryFeeDisplay > 0 ? "جمع قابل پرداخت" : allItemsPriced ? "جمع اقلام" : "جمع اقلام قیمت‌دار"}</span><strong>{formatToman(readySubtotal + customSubtotal + deliveryFeeDisplay)}</strong></div>
+                <div className={styles.total}><span>{!allItemsPriced ? "جمع نهایی" : deliveryFeeDisplay > 0 ? "جمع قابل پرداخت" : "جمع اقلام"}</span><strong>{allItemsPriced ? formatToman((readySubtotal ?? 0) + (customSubtotal ?? 0) + deliveryFeeDisplay) : "پس از تأیید قیمت‌ها"}</strong></div>
                 <p>روش دریافت: {activeDeliveryMethod === "pickup" ? "تحویل حضوری" : "اسنپ‌پیک در کرج"}. {activeDeliveryMethod === "delivery" && deliveryFeeCollection === "پرداخت جداگانه به اسنپ‌پیک" ? "هزینهٔ پیک جداگانه به اسنپ‌پیک پرداخت می‌شود." : activeDeliveryMethod === "delivery" && deliveryFeeDisplay ? "هزینهٔ ثابت پیک در پرداخت آنلاین لحاظ شده است." : "جمع نهایی از اطلاعات ERPNext محاسبه می‌شود."}</p>
                 <a href="/cart">ویرایش سبد خرید</a>
                 <a className={styles.deliveryLink} href="/pickup">جزئیات روش‌های دریافت</a>

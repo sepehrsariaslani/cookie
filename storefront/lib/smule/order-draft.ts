@@ -47,13 +47,20 @@ function normalizeQuantity(quantity: number) {
   return Number.isFinite(quantity) && quantity >= 1 ? Math.floor(quantity) : null;
 }
 
-export function getReadySubtotal(items: DraftCartLine[], products: SmuleProduct[] = SMULE_PRODUCTS) {
-  return items.reduce((total, item) => {
-    if (item.kind !== "product") return total;
+export function getReadySubtotal(items: DraftCartLine[], products: SmuleProduct[] = SMULE_PRODUCTS): number | null {
+  const productItems = items.filter((item) => item.kind === "product");
+  if (!productItems.length) return 0;
+
+  let subtotal = 0;
+  for (const item of productItems) {
     const product = getSmuleProduct(item.productSlug, products);
     const quantity = normalizeQuantity(item.quantity);
-    return product && !product.isSample && quantity ? total + product.price * quantity : total;
-  }, 0);
+    if (!product || product.isSample || !Number.isFinite(product.price) || product.price <= 0 || !quantity) {
+      return null;
+    }
+    subtotal += product.price * quantity;
+  }
+  return subtotal;
 }
 
 export function buildLocalOrderDraft({ items, customer, deliveryMethod, requestedForDate = "", requestedForTime = "", createdAt = new Date(), id, products = SMULE_PRODUCTS }: BuildLocalOrderInput): SmuleOrderDraft | null {
@@ -66,7 +73,7 @@ export function buildLocalOrderDraft({ items, customer, deliveryMethod, requeste
 
     if (item.kind === "product") {
       const product = getSmuleProduct(item.productSlug, products);
-      if (!product || product.isSample) return null;
+      if (!product || product.isSample || !Number.isFinite(product.price) || product.price <= 0) return null;
       lines.push({
         kind: "product",
         productSlug: product.slug,

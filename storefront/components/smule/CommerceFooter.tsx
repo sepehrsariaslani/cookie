@@ -29,7 +29,7 @@ export function CommerceFooter() {
           <a href="/returns">لغو و بازپرداخت</a>
         </nav>
         <div className={styles.contact}>
-          <span><MapPin size={15} aria-hidden="true" /> نشانی تحویل حضوری هنوز ثبت نشده</span>
+          <span><MapPin size={15} aria-hidden="true" /> ارسال با اسنپ‌پیک · فقط کرج</span>
           <span><MessageCircle size={15} aria-hidden="true" /> راه ارتباطی فروشگاه هنوز ثبت نشده</span>
         </div>
       </div>

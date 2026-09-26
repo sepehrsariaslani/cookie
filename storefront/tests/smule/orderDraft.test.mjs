@@ -18,7 +18,7 @@ test("ready subtotal and product line use the catalog price, not the stored cart
   });
 
   assert.equal(getReadySubtotal(items, verifiedProducts), 380_000);
-  assert.equal(getReadySubtotal(items), 0);
+  assert.equal(getReadySubtotal(items), null);
   assert.ok(order);
   assert.equal(order.readySubtotal, 380_000);
   assert.equal(order.lines[0].kind, "product");
@@ -28,6 +28,18 @@ test("ready subtotal and product line use the catalog price, not the stored cart
   assert.equal(order.customer.city, "");
   assert.equal(order.customer.address, "");
   assert.equal(order.customer.note, "یادداشت");
+});
+
+test("an unverified or zero-priced catalog item has no subtotal and cannot become an order draft", () => {
+  const items = [{ kind: "product", productSlug: "cinnamon-caramel", quantity: 1 }];
+  const unpricedProducts = SMULE_PRODUCTS.map((product) => ({
+    ...product,
+    isSample: false,
+    price: 0,
+  }));
+
+  assert.equal(getReadySubtotal(items, unpricedProducts), null);
+  assert.equal(buildLocalOrderDraft({ items, customer, deliveryMethod: "pickup", products: unpricedProducts }), null);
 });
 
 test("custom-cookie line is recalculated from its recipe and remains quote-required", () => {

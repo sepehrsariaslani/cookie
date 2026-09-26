@@ -13,6 +13,9 @@
 .formCard, .summary { padding: 1.25rem; border: 1px solid var(--line); border-radius: 1.3rem; background: var(--surface-card); }
 .formCard h2, .summary h2 { margin: 0; color: var(--burgundy); font-size: 1.15rem; }
 .formIntro { margin: .2rem 0 1rem; color: var(--ink-soft); font-size: .85rem; }
+.checkoutControls { display: grid; gap: .9rem; min-width: 0; margin: 0; padding: 0; border: 0; }
+.checkoutControls:disabled { opacity: .72; }
+.checkoutBlockMessage { margin: 0 0 .9rem; padding: .75rem .85rem; border-inline-start: 3px solid var(--gold-ink); border-radius: .75rem; background: color-mix(in srgb, var(--butter) 16%, white); color: var(--burgundy); font-size: .84rem; line-height: 1.7; }
 .deliveryOptions { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; margin: 0 0 1rem; padding: 0; border: 0; }
 .srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 .deliveryOption { display: flex; min-height: 82px; align-items: flex-start; gap: .6rem; padding: .8rem; border: 1px solid var(--line); border-radius: .9rem; background: var(--surface-card); cursor: pointer; transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease; }

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useCookieCart } from "@/components/smule/CartProvider";
 import { useStorefrontData } from "@/components/smule/StorefrontDataProvider";
 import { smuleAsset } from "@/lib/smule/assets";
-import { isCheckoutAvailable } from "@/lib/smule/order-draft";
+import { getReadySubtotal, isCheckoutAvailable } from "@/lib/smule/order-draft";
 import { CommerceFooter } from "./CommerceFooter";
 import { CommerceHeader } from "./CommerceHeader";
 import { calculateCookiePrice, DOUGHS, getToppingCapacity, getToppingName, MAX_TOPPING_COUNT } from "@/lib/smule/cookie-builder";
@@ -17,34 +17,29 @@ import styles from "./CartPage.module.css";
 export function CartPage() {
   const { items, ready, itemCount, setQuantity, removeCookie } = useCookieCart();
   const { products, components, connected, ordersEnabled, currency, pricingMarkupPercent, customCookieFixedCost, priceRoundingIncrement } = useStorefrontData();
+  const productItems = items.filter((item) => item.kind === "product");
   const customItems = items.filter((item) => item.kind === "custom");
-  const readySubtotal = items.reduce((total, item) => {
-    if (item.kind !== "product") return total;
-    const product = getSmuleProduct(item.productSlug, products);
-    return total + (product && !product.isSample ? product.price * item.quantity : 0);
-  }, 0);
+  const readySubtotal = getReadySubtotal(items, products);
   const customPrices = new Map(customItems.map((item) => [
     item.id,
     calculateCookiePrice(item.doughId, item.toppingIds, item.sizeGrams, components, currency, pricingMarkupPercent, customCookieFixedCost, priceRoundingIncrement),
   ]));
-  const customSubtotal = customItems.reduce((total, item) => {
-    const unitPrice = customPrices.get(item.id);
-    return total + (unitPrice === null || unitPrice === undefined ? 0 : Math.round(toDisplayTomans(unitPrice, currency)) * item.quantity);
-  }, 0);
   const unpricedCustomCount = [...customPrices.values()].filter((price) => price === null).length;
-  const pricedSubtotal = readySubtotal + customSubtotal;
-  const allItemsPriced = unpricedCustomCount === 0 && items.every((item) => {
-    if (item.kind === "custom") return customPrices.get(item.id) !== null;
-    const product = getSmuleProduct(item.productSlug, products);
-    return Boolean(product && !product.isSample && product.price > 0);
-  });
+  const customSubtotal = unpricedCustomCount
+    ? null
+    : customItems.reduce((total, item) => {
+      const unitPrice = customPrices.get(item.id);
+      return total + (unitPrice === null || unitPrice === undefined ? 0 : Math.round(toDisplayTomans(unitPrice, currency)) * item.quantity);
+    }, 0);
+  const pricedSubtotal = (readySubtotal ?? 0) + (customSubtotal ?? 0);
+  const allItemsPriced = readySubtotal !== null && customSubtotal !== null;
   const checkoutAvailable = isCheckoutAvailable({ itemCount, allItemsPriced, ordersEnabled });
   const checkoutStatus = !connected
     ? "اتصال فروشگاه در دسترس نیست؛ پس از برقراری دوباره، قیمت‌ها را تازه‌سازی کن."
-    : !allItemsPriced
-      ? "یک یا چند قلم سبد هنوز قیمت فروش تأییدشده ندارد؛ همان قلم‌ها را از سبد بردار."
-      : !ordersEnabled
-        ? "قیمت‌ها آماده‌اند، اما فروشگاه هنوز ثبت سفارش آنلاین را فعال نکرده است."
+    : !ordersEnabled
+      ? "پذیرش سفارش آنلاین هنوز در تنظیمات فروشگاه فعال نشده؛ سبدت را نگه دار تا آماده شود."
+      : !allItemsPriced
+        ? "قیمت فروش یک یا چند قلم در ERPNext تأیید نشده؛ آن قلم‌ها را حذف کن یا پس از اصلاح کاتالوگ، صفحه را تازه کن."
         : "";
   const totalWeight = customItems.reduce((total, item) => total + item.nutrition.weight * item.quantity, 0);
   const totalCalories = customItems.reduce((total, item) => total + item.nutrition.calories * item.quantity, 0);
@@ -81,7 +76,19 @@ export function CartPage() {
                 {items.map((item) => {
                   if (item.kind === "product") {
                     const product = getSmuleProduct(item.productSlug, products);
-                    if (!product || product.isSample) return <article className={styles.line} key={item.id}><div className={styles.lineDetails}><div className={styles.lineTitleRow}><div><h2>این محصول هنوز قیمت فروش تأییدشده ندارد</h2><p>قیمت یا دستور واقعی آن در ERPNext آماده نیست؛ برای جلوگیری از نمایش نرخ نمونه، آن را پیش از ثبت درخواست از سبد بردار.</p></div><Button className={styles.removeButton} variant="ghost" size="icon" onClick={() => removeCookie(item.id)} aria-label="حذف محصول ناموجود از سبد"><Trash2 size={18} aria-hidden="true" /></Button></div></div></article>;
+                    if (!product || product.isSample || !Number.isFinite(product.price) || product.price <= 0) return (
+                      <article className={styles.line} key={item.id}>
+                        <div className={styles.lineDetails}>
+                          <div className={styles.lineTitleRow}>
+                            <div>
+                              <h2>{product ? `${product.name} · قیمت فروش تأیید نشده` : "محصول دیگر در منوی فروش نیست"}</h2>
+                              <p>قیمت یا دستور واقعی این کالا در ERPNext آماده نیست. سبدت را نگه دار تا پس از تأیید فروشگاه دوباره بررسی کنی، یا اگر نمی‌خواهی حذفش کن.</p>
+                            </div>
+                            <Button className={styles.removeButton} variant="ghost" size="icon" onClick={() => removeCookie(item.id)} aria-label={`حذف ${product?.name ?? "محصول ناموجود"} از سبد`}><Trash2 size={18} aria-hidden="true" /></Button>
+                          </div>
+                        </div>
+                      </article>
+                    );
                     return (
                       <article className={styles.line} key={item.id}>
                         <a className={styles.cookieMark} href={`/menu/product?slug=${encodeURIComponent(product.slug)}`} aria-label={`جزئیات ${product.name}`}>
@@ -141,8 +148,8 @@ export function CartPage() {
                 <h2>خلاصهٔ خرید</h2>
                 <dl>
                   <div><dt>تعداد کل</dt><dd>{formatPersianNumber(itemCount)} عدد</dd></div>
-                  <div><dt>کوکی‌های آماده</dt><dd>{formatToman(readySubtotal)}</dd></div>
-                  {customItems.length > 0 && <div><dt>کوکی‌های سفارشی</dt><dd>{unpricedCustomCount ? "نرخ کامل نیست" : formatToman(customSubtotal)}</dd></div>}
+                  {productItems.length > 0 && <div><dt>کوکی‌های آماده</dt><dd>{readySubtotal === null ? "قیمت تأیید نشده" : formatToman(readySubtotal)}</dd></div>}
+                  {customItems.length > 0 && <div><dt>کوکی‌های سفارشی</dt><dd>{customSubtotal === null ? "قیمت تأیید نشده" : formatToman(customSubtotal)}</dd></div>}
                   {allItemsPriced && <div><dt>جمع اقلام</dt><dd>{formatToman(pricedSubtotal)}</dd></div>}
                   {totalWeight > 0 && <div><dt>وزن سفارشی تقریبی</dt><dd>{formatPersianNumber(totalWeight)} گرم</dd></div>}
                   {totalCalories > 0 && <div><dt>کالری سفارشی تقریبی</dt><dd>{formatPersianNumber(totalCalories)} kcal</dd></div>}
