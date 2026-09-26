@@ -31,6 +31,18 @@ type BuildLocalOrderInput = {
   products?: SmuleProduct[];
 };
 
+export function isCheckoutAvailable({
+	itemCount,
+	allItemsPriced,
+	ordersEnabled,
+}: {
+	itemCount: number;
+	allItemsPriced: boolean;
+	ordersEnabled: boolean;
+}) {
+	return itemCount > 0 && allItemsPriced && ordersEnabled;
+}
+
 function normalizeQuantity(quantity: number) {
   return Number.isFinite(quantity) && quantity >= 1 ? Math.floor(quantity) : null;
 }

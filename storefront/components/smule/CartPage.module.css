@@ -37,6 +37,8 @@
 .priceNotice { margin: .9rem 0; padding: .7rem; border-radius: .8rem; background: color-mix(in srgb, var(--butter) 12%, transparent); color: var(--cream); font-size: .82rem; line-height: 1.7; }
 .continueButton { display: flex; min-height: 48px; align-items: center; justify-content: center; gap: .45rem; border: 1px solid var(--butter); border-radius: 999px; background: var(--butter); color: var(--burgundy); font-size: .9rem; font-weight: 750; transition: transform 160ms ease, background 160ms ease; }
 .continueButton:hover { transform: translateY(-1px); background: var(--butter-hover); }
+.continueButton:disabled { opacity: .62; cursor: not-allowed; transform: none; }
+.checkoutStatus { margin: .55rem .2rem 0; color: var(--cream); font-size: .78rem; line-height: 1.65; }
 .buildMoreLink { display: block; margin-top: .7rem; color: var(--butter); font-size: .84rem; font-weight: 650; text-align: center; }
 .buildMoreLink:hover { text-decoration: underline; text-underline-offset: 3px; }
 .continueButton:focus-visible,

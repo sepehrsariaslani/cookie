@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildLocalOrderDraft, getReadySubtotal } from "../../lib/smule/order-draft.ts";
+import { buildLocalOrderDraft, getReadySubtotal, isCheckoutAvailable } from "../../lib/smule/order-draft.ts";
 import { SMULE_PRODUCTS } from "../../lib/smule/products.ts";
 
 const customer = { name: "  آزمایش  ", phone: "09120000000", city: "تهران", address: "نشانی آزمایشی", note: "  یادداشت  " };
@@ -88,4 +88,11 @@ test("empty carts, invalid products, and invalid quantities cannot become drafts
     customer,
     deliveryMethod: "pickup",
   }), null);
+});
+
+test("checkout stays unavailable for empty, unpriced, or disabled-store carts", () => {
+  assert.equal(isCheckoutAvailable({ itemCount: 0, allItemsPriced: true, ordersEnabled: true }), false);
+  assert.equal(isCheckoutAvailable({ itemCount: 1, allItemsPriced: false, ordersEnabled: true }), false);
+  assert.equal(isCheckoutAvailable({ itemCount: 1, allItemsPriced: true, ordersEnabled: false }), false);
+  assert.equal(isCheckoutAvailable({ itemCount: 2, allItemsPriced: true, ordersEnabled: true }), true);
 });

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useCookieCart } from "@/components/smule/CartProvider";
 import { useStorefrontData } from "@/components/smule/StorefrontDataProvider";
 import { smuleAsset } from "@/lib/smule/assets";
+import { isCheckoutAvailable } from "@/lib/smule/order-draft";
 import { CommerceFooter } from "./CommerceFooter";
 import { CommerceHeader } from "./CommerceHeader";
 import { calculateCookiePrice, DOUGHS, getToppingCapacity, getToppingName, MAX_TOPPING_COUNT } from "@/lib/smule/cookie-builder";
@@ -15,7 +16,7 @@ import styles from "./CartPage.module.css";
 
 export function CartPage() {
   const { items, ready, itemCount, setQuantity, removeCookie } = useCookieCart();
-  const { products, components, connected, currency, pricingMarkupPercent, customCookieFixedCost, priceRoundingIncrement } = useStorefrontData();
+  const { products, components, connected, ordersEnabled, currency, pricingMarkupPercent, customCookieFixedCost, priceRoundingIncrement } = useStorefrontData();
   const customItems = items.filter((item) => item.kind === "custom");
   const readySubtotal = items.reduce((total, item) => {
     if (item.kind !== "product") return total;
@@ -37,6 +38,14 @@ export function CartPage() {
     const product = getSmuleProduct(item.productSlug, products);
     return Boolean(product && !product.isSample && product.price > 0);
   });
+  const checkoutAvailable = isCheckoutAvailable({ itemCount, allItemsPriced, ordersEnabled });
+  const checkoutStatus = !connected
+    ? "اتصال فروشگاه در دسترس نیست؛ پس از برقراری دوباره، قیمت‌ها را تازه‌سازی کن."
+    : !allItemsPriced
+      ? "یک یا چند قلم سبد هنوز قیمت فروش تأییدشده ندارد؛ همان قلم‌ها را از سبد بردار."
+      : !ordersEnabled
+        ? "قیمت‌ها آماده‌اند، اما فروشگاه هنوز ثبت سفارش آنلاین را فعال نکرده است."
+        : "";
   const totalWeight = customItems.reduce((total, item) => total + item.nutrition.weight * item.quantity, 0);
   const totalCalories = customItems.reduce((total, item) => total + item.nutrition.calories * item.quantity, 0);
 
@@ -138,12 +147,19 @@ export function CartPage() {
                   {totalWeight > 0 && <div><dt>وزن سفارشی تقریبی</dt><dd>{formatPersianNumber(totalWeight)} گرم</dd></div>}
                   {totalCalories > 0 && <div><dt>کالری سفارشی تقریبی</dt><dd>{formatPersianNumber(totalCalories)} kcal</dd></div>}
                 </dl>
-                <p className={styles.priceNotice}>{customItems.length
-                  ? unpricedCustomCount
-                    ? "برای قیمت زنده، بهای خرید هر گرم خمیر و افزودنی‌های انتخابی و تنظیم قانون قیمت‌گذاری باید در ERPNext کامل باشد."
-                    : "قیمت سفارشی از بهای مواد و هزینهٔ ثابت، با درصد افزوده و گردکردن رو به بالا محاسبه می‌شود؛ هزینهٔ پیک جداست."
-                  : connected ? "قیمت کوکی آماده بر اساس بهای BOM تأییدشده، درصد افزوده و گام گردکردن ERPNext محاسبه می‌شود." : "اتصال ERPNext در دسترس نیست؛ قیمت‌های نمایشی صرفاً نمونه‌اند و سفارش ثبت نمی‌شود."}</p>
-                <a className={styles.continueButton} href="/checkout">ادامه و ثبت اطلاعات <ArrowLeft size={17} aria-hidden="true" /></a>
+                <p className={styles.priceNotice}>{!connected
+                  ? "اتصال ERPNext در دسترس نیست؛ قیمت‌های نمایشی صرفاً نمونه‌اند و سفارش ثبت نمی‌شود."
+                  : !allItemsPriced
+                    ? customItems.length
+                      ? "برای قیمت زنده، بهای خرید هر گرم خمیر و افزودنی‌های انتخابی و تنظیم قانون قیمت‌گذاری باید در ERPNext کامل باشد."
+                      : "قیمت واقعی این محصول و BOM تأییدشده هنوز در کاتالوگ فروشگاه موجود نیست."
+                    : customItems.length
+                      ? "قیمت سفارشی از بهای مواد و هزینهٔ ثابت، با درصد افزوده و گردکردن رو به بالا محاسبه می‌شود؛ هزینهٔ پیک جداست."
+                      : "قیمت کوکی آماده بر اساس بهای BOM تأییدشده، درصد افزوده و گام گردکردن ERPNext محاسبه می‌شود."}</p>
+                {checkoutAvailable
+                  ? <a className={styles.continueButton} href="/checkout">ادامه و ثبت اطلاعات <ArrowLeft size={17} aria-hidden="true" /></a>
+                  : <button className={styles.continueButton} type="button" disabled aria-describedby="cart-checkout-status">ثبت سفارش فعلاً در دسترس نیست</button>}
+                {checkoutStatus && <p id="cart-checkout-status" className={styles.checkoutStatus} role="status">{checkoutStatus}</p>}
                 <a className={styles.buildMoreLink} href="/build-cookie">یا ساخت یک کوکی دلخواه</a>
                 <p className={styles.localNotice}>سبد روی همین مرورگر می‌ماند. اطلاعات سفارش و ارسال در مرحلهٔ بعد مرور می‌شود.</p>
               </aside>
