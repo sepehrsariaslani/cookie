@@ -8,6 +8,7 @@ app_license = "mit"
 # Smule uses ERPNext's native Item, Item Price, Customer, and Sales Order records.
 required_apps = ["erpnext"]
 after_install = "smule_store.setup.install.after_install"
+after_migrate = "smule_store.setup.install.after_migrate"
 
 website_route_rules = [
 	{"from_route": "/", "to_route": "smule_storefront"},

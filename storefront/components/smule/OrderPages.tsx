@@ -58,7 +58,7 @@ export function OrderConfirmationPage({ orderId }: { orderId: string }) {
               ))}
               <div className={styles.orderTotal}><span>جمعِ اقلام آماده</span><strong>{formatToman(order.readySubtotal)}</strong></div>
               {order.customQuoteRequired && <p className={styles.quoteNote}>قیمت ترکیب سفارشی پس از تأیید مواد و وزن اعلام می‌شود.</p>}
-              <div className={styles.contactDetails}><strong>اطلاعات تحویل واردشده</strong><span>{order.customer.name} · {order.customer.phone}</span><span>روش دریافت: {order.deliveryMethod === "pickup" ? "تحویل حضوری" : "ارسال"}</span>{order.deliveryMethod !== "pickup" && <span>{order.customer.city}، {order.customer.address}</span>}{order.customer.note && <span>توضیحات: {order.customer.note}</span>}</div>
+              <div className={styles.contactDetails}><strong>اطلاعات تحویل واردشده</strong><span>{order.customer.name} · {order.customer.phone}</span><span>روش دریافت: {order.deliveryMethod === "pickup" ? "تحویل حضوری" : "ارسال"}</span>{order.requestedForDate && <span>زمان پیشنهادی: {new Date(`${order.requestedForDate}T12:00:00`).toLocaleDateString("fa-IR")}{order.requestedForTime ? ` · ${order.requestedForTime.slice(0, 5)}` : ""} (در انتظار تأیید)</span>}{order.deliveryMethod !== "pickup" && <span>{order.customer.city}، {order.customer.address}</span>}{order.customer.note && <span>توضیحات: {order.customer.note}</span>}</div>
             </section>
             <section className={styles.nextStep}>
               <h2>قدم بعدی</h2>

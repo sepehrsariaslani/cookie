@@ -32,6 +32,8 @@ export type SmuleOrderDraft = {
   status: "local-draft" | "sent-to-frappe";
   erpRequestName?: string;
   deliveryMethod: "pickup" | "delivery";
+  requestedForDate?: string;
+  requestedForTime?: string;
   customer: {
     name: string;
     phone: string;
@@ -79,6 +81,7 @@ export function getWhatsAppHref(order: SmuleOrderDraft) {
     `نام: ${order.customer.name}`,
     `تلفن: ${order.customer.phone}`,
     `روش دریافت: ${order.deliveryMethod === "pickup" ? "تحویل حضوری" : "ارسال"}`,
+    order.requestedForDate ? `زمان پیشنهادی: ${order.requestedForDate}${order.requestedForTime ? ` · ${order.requestedForTime.slice(0, 5)}` : ""}` : "",
     ...(order.deliveryMethod === "delivery" ? [`شهر: ${order.customer.city}`, `نشانی: ${order.customer.address}`] : []),
     ...itemLines,
     order.customer.note ? `توضیحات: ${order.customer.note}` : "",

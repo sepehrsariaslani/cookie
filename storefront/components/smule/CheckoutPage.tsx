@@ -8,14 +8,16 @@ import { CommerceFooter } from "@/components/smule/CommerceFooter";
 import { CommerceHeader } from "@/components/smule/CommerceHeader";
 import { useCookieCart } from "@/components/smule/CartProvider";
 import { useStorefrontData } from "@/components/smule/StorefrontDataProvider";
+import { CheckoutScheduleFields, type DeliveryCoordinates } from "@/components/smule/checkout/CheckoutScheduleFields";
 import { DOUGHS } from "@/lib/smule/cookie-builder";
+import { fetchCustomerAccount, type SmuleAccountAddress } from "@/lib/smule/customer-account";
 import { sendOrderRequest } from "@/lib/smule/frappe-client";
 import { buildLocalOrderDraft, getReadySubtotal } from "@/lib/smule/order-draft";
 import { ORDER_DRAFTS_STORAGE_KEY, readOrderDrafts } from "@/lib/smule/orders";
 import { formatPersianNumber, formatToman, getSmuleProduct, toDisplayTomans } from "@/lib/smule/products";
 import styles from "./CheckoutPage.module.css";
 
-type CheckoutField = "name" | "phone" | "city" | "address";
+type CheckoutField = "name" | "phone" | "city" | "address" | "requestedForDate";
 type CheckoutErrors = Partial<Record<CheckoutField, string>>;
 
 function normalizePhoneNumber(value: string) {
@@ -34,20 +36,58 @@ export function CheckoutPage() {
   const [deliveryMethod, setDeliveryMethod] = useState<"pickup" | "delivery">("pickup");
   const [submittedOrderId, setSubmittedOrderId] = useState("");
   const [customer, setCustomer] = useState({ name: "", phone: "", city: "", address: "", note: "" });
+  const [scheduled, setScheduled] = useState(false);
+  const [requestedDate, setRequestedDate] = useState("");
+  const [requestedTime, setRequestedTime] = useState("");
+  const [coordinates, setCoordinates] = useState<DeliveryCoordinates | null>(null);
+  const [savedAddresses, setSavedAddresses] = useState<SmuleAccountAddress[]>([]);
+  const [selectedAddress, setSelectedAddress] = useState("");
   const canPickup = Boolean(pickupAddress);
   const canDeliver = deliveryEnabled;
-  const deliveryMethodAvailable = deliveryMethod === "pickup" ? canPickup : canDeliver;
+  const activeDeliveryMethod = !canPickup && canDeliver ? "delivery" : deliveryMethod;
+  const deliveryMethodAvailable = activeDeliveryMethod === "pickup" ? canPickup : canDeliver;
   const readySubtotal = getReadySubtotal(items, products);
 
   useEffect(() => {
-    if (connected && !canPickup && canDeliver) setDeliveryMethod("delivery");
-  }, [connected, canPickup, canDeliver]);
+    const controller = new AbortController();
+    fetchCustomerAccount(controller.signal)
+      .then((account) => {
+        if (!account.authenticated) return;
+        setSavedAddresses(account.addresses ?? []);
+        setCustomer((current) => ({
+          ...current,
+          name: current.name || account.profile?.fullName || "",
+          phone: current.phone || account.profile?.phone || "",
+        }));
+        const preferred = (account.addresses ?? []).find((address) => address.is_primary_address) ?? account.addresses?.[0];
+        if (preferred) {
+          setSelectedAddress(preferred.name);
+          setCustomer((current) => ({
+            ...current,
+            city: current.city || preferred.city || "",
+            address: current.address || [preferred.address_line1, preferred.address_line2].filter(Boolean).join("، "),
+          }));
+        }
+      })
+      .catch(() => {
+        // Checkout remains usable with manual contact and address entry if the account API is unavailable.
+      });
+    return () => controller.abort();
+  }, []);
 
   function updateCustomer(field: keyof typeof customer, value: string) {
     setCustomer((current) => ({ ...current, [field]: value }));
     if (field !== "note" && fieldErrors[field]) {
-      setFieldErrors((current) => ({ ...current, [field]: undefined }));
+      clearFieldErrors(field);
     }
+  }
+
+  function clearFieldErrors(...fields: CheckoutField[]) {
+    setFieldErrors((current) => {
+      const next = { ...current };
+      fields.forEach((field) => delete next[field]);
+      return next;
+    });
   }
 
   function validateCustomer() {
@@ -55,10 +95,11 @@ export function CheckoutPage() {
     if (customer.name.trim().length < 2) errors.name = "نام را با دست‌کم دو نویسه وارد کن.";
     const phoneDigits = normalizePhoneNumber(customer.phone);
     if (phoneDigits.length < 10 || phoneDigits.length > 15) errors.phone = "شمارهٔ تماس را با ۱۰ تا ۱۵ رقم وارد کن.";
-    if (deliveryMethod === "delivery" && customer.city.trim().length < 2) errors.city = "نام شهر را وارد کن.";
-    if (deliveryMethod === "delivery" && customer.address.trim().length < 8) errors.address = "نشانی کامل را وارد کن (حداقل ۸ نویسه).";
+    if (activeDeliveryMethod === "delivery" && customer.city.trim().length < 2) errors.city = "نام شهر را وارد کن.";
+    if (activeDeliveryMethod === "delivery" && customer.address.trim().length < 8) errors.address = "نشانی کامل را وارد کن (حداقل ۸ نویسه).";
+    if (scheduled && !requestedDate) errors.requestedForDate = "برای ثبت زمان دلخواه، تاریخ را انتخاب کن.";
     setFieldErrors(errors);
-    const firstInvalid = (Object.keys(errors) as CheckoutField[])[0];
+    const firstInvalid = (["name", "phone", "city", "address", "requestedForDate"] as CheckoutField[]).find((field) => errors[field]);
     if (firstInvalid) {
       document.getElementById(`checkout-${firstInvalid}`)?.focus();
       return false;
@@ -76,7 +117,14 @@ export function CheckoutPage() {
     setSubmitting(true);
     setMessage("");
 
-    const order = buildLocalOrderDraft({ items, customer, deliveryMethod, products });
+    const order = buildLocalOrderDraft({
+      items,
+      customer,
+      deliveryMethod: activeDeliveryMethod,
+      requestedForDate: scheduled ? requestedDate : "",
+      requestedForTime: scheduled ? requestedTime : "",
+      products,
+    });
     if (!order) {
       setMessage("یکی از اقلام سبد دیگر در منو در دسترس نیست. سبد خرید را بررسی و دوباره تلاش کن.");
       setSubmitting(false);
@@ -93,8 +141,14 @@ export function CheckoutPage() {
           city: customer.city.trim(),
           address: customer.address.trim(),
           note: customer.note.trim(),
+          latitude: activeDeliveryMethod === "delivery" ? coordinates?.latitude : undefined,
+          longitude: activeDeliveryMethod === "delivery" ? coordinates?.longitude : undefined,
         },
-        deliveryMethod,
+        schedule: {
+          date: scheduled ? requestedDate : "",
+          time: scheduled ? requestedTime : "",
+        },
+        deliveryMethod: activeDeliveryMethod,
         items: items.map((item) => item.kind === "product"
           ? { kind: "product", productSlug: item.productSlug, quantity: item.quantity }
           : { kind: "custom", doughId: item.doughId, sizeGrams: item.sizeGrams, toppingIds: item.toppingIds, quantity: item.quantity }),
@@ -160,15 +214,15 @@ export function CheckoutPage() {
                 <p className={styles.formIntro}>تحویل حضوری را انتخاب کن یا نشانی ارسال را وارد کن.</p>
                 <fieldset className={styles.deliveryOptions}>
                   <legend className={styles.srOnly}>روش دریافت</legend>
-                  <label className={`${styles.deliveryOption} ${deliveryMethod === "pickup" ? styles.deliveryOptionSelected : ""}`}>
-                    <input type="radio" name="deliveryMethod" value="pickup" checked={deliveryMethod === "pickup"} disabled={!canPickup} onChange={() => {
+                  <label className={`${styles.deliveryOption} ${activeDeliveryMethod === "pickup" ? styles.deliveryOptionSelected : ""}`}>
+                    <input type="radio" name="deliveryMethod" value="pickup" checked={activeDeliveryMethod === "pickup"} disabled={!canPickup} onChange={() => {
                       setDeliveryMethod("pickup");
-                      setFieldErrors((current) => ({ ...current, city: undefined, address: undefined }));
+                      clearFieldErrors("city", "address");
                     }} />
                     <span><strong>تحویل حضوری</strong><small>{canPickup ? `${pickupAddress}${pickupHours ? ` · ${pickupHours}` : ""}` : "نشانی تحویل هنوز در تنظیمات اسموله ثبت نشده"}</small></span>
                   </label>
-                  <label className={`${styles.deliveryOption} ${deliveryMethod === "delivery" ? styles.deliveryOptionSelected : ""}`}>
-                    <input type="radio" name="deliveryMethod" value="delivery" checked={deliveryMethod === "delivery"} disabled={!canDeliver} onChange={() => setDeliveryMethod("delivery")} />
+                  <label className={`${styles.deliveryOption} ${activeDeliveryMethod === "delivery" ? styles.deliveryOptionSelected : ""}`}>
+                    <input type="radio" name="deliveryMethod" value="delivery" checked={activeDeliveryMethod === "delivery"} disabled={!canDeliver} onChange={() => setDeliveryMethod("delivery")} />
                     <span><strong>ارسال</strong><small>{canDeliver ? "هزینه و محدوده پس از بررسی درخواست هماهنگ می‌شود" : "ارسال در تنظیمات اسموله فعال نشده"}</small></span>
                   </label>
                 </fieldset>
@@ -179,13 +233,49 @@ export function CheckoutPage() {
                 <div className={styles.fields}>
                   <label><span>نام و نام خانوادگی <b>*</b></span><input id="checkout-name" autoComplete="name" required aria-invalid={Boolean(fieldErrors.name)} aria-describedby={fieldErrors.name ? "checkout-name-error" : undefined} value={customer.name} onChange={(event) => updateCustomer("name", event.target.value)} placeholder="نام گیرنده" />{fieldErrors.name && <small id="checkout-name-error" className={styles.fieldError}>{fieldErrors.name}</small>}</label>
                   <label><span>شمارهٔ تماس <b>*</b></span><input id="checkout-phone" autoComplete="tel" inputMode="tel" type="tel" required aria-invalid={Boolean(fieldErrors.phone)} aria-describedby={fieldErrors.phone ? "checkout-phone-error" : undefined} value={customer.phone} onChange={(event) => updateCustomer("phone", event.target.value)} placeholder="۰۹۱۲…" />{fieldErrors.phone && <small id="checkout-phone-error" className={styles.fieldError}>{fieldErrors.phone}</small>}</label>
-                  {deliveryMethod === "delivery" && <>
+                  {activeDeliveryMethod === "delivery" && <>
+                    {savedAddresses.length > 0 && <label className={styles.fullField}><span>نشانی ذخیره‌شده</span><select value={selectedAddress} onChange={(event) => {
+                      const selected = savedAddresses.find((address) => address.name === event.target.value);
+                      setSelectedAddress(event.target.value);
+                      if (selected) setCustomer((current) => ({
+                        ...current,
+                        city: selected.city || "",
+                        address: [selected.address_line1, selected.address_line2].filter(Boolean).join("، "),
+                      }));
+                      else setCustomer((current) => ({ ...current, city: "", address: "" }));
+                    }}>
+                      <option value="">واردکردن نشانی دیگر</option>
+                      {savedAddresses.map((address) => <option key={address.name} value={address.name}>{address.address_title || address.city} · {address.city}</option>)}
+                    </select></label>}
                     <label><span>شهر <b>*</b></span><input id="checkout-city" autoComplete="address-level2" required aria-invalid={Boolean(fieldErrors.city)} aria-describedby={fieldErrors.city ? "checkout-city-error" : undefined} value={customer.city} onChange={(event) => updateCustomer("city", event.target.value)} placeholder="نام شهر" />{fieldErrors.city && <small id="checkout-city-error" className={styles.fieldError}>{fieldErrors.city}</small>}</label>
                     <label className={styles.fullField}><span>نشانی کامل <b>*</b></span><textarea id="checkout-address" autoComplete="street-address" required aria-invalid={Boolean(fieldErrors.address)} aria-describedby={fieldErrors.address ? "checkout-address-error" : undefined} rows={3} value={customer.address} onChange={(event) => updateCustomer("address", event.target.value)} placeholder="خیابان، کوچه، پلاک و واحد" />{fieldErrors.address && <small id="checkout-address-error" className={styles.fieldError}>{fieldErrors.address}</small>}</label>
                   </>}
-                  {deliveryMethod === "pickup" && <p className={`${styles.fullField} ${styles.pickupNotice}`}>{pickupAddress ? `نشانی تحویل حضوری: ${pickupAddress}${pickupHours ? ` · ${pickupHours}` : ""}` : "تا وقتی نشانی تحویل در تنظیمات فروشگاه ثبت نشده باشد، امکان ثبت درخواست تحویل حضوری نیست."}</p>}
+                  {activeDeliveryMethod === "pickup" && <p className={`${styles.fullField} ${styles.pickupNotice}`}>{pickupAddress ? `نشانی تحویل حضوری: ${pickupAddress}${pickupHours ? ` · ${pickupHours}` : ""}` : "تا وقتی نشانی تحویل در تنظیمات فروشگاه ثبت نشده باشد، امکان ثبت درخواست تحویل حضوری نیست."}</p>}
+                  <CheckoutScheduleFields
+                    deliveryMethod={activeDeliveryMethod}
+                    scheduled={scheduled}
+                    requestedDate={requestedDate}
+                    requestedTime={requestedTime}
+                    coordinates={coordinates}
+                    dateError={fieldErrors.requestedForDate}
+                    onScheduledChange={(next) => {
+                      setScheduled(next);
+                      if (!next) {
+                        setRequestedDate("");
+                        setRequestedTime("");
+                        clearFieldErrors("requestedForDate");
+                      }
+                    }}
+                    onScheduleChange={(date, time) => {
+                      setRequestedDate(date);
+                      setRequestedTime(time);
+                      clearFieldErrors("requestedForDate");
+                    }}
+                    onCoordinatesChange={setCoordinates}
+                  />
                   <label className={styles.fullField}><span>توضیح برای اسموله <small>اختیاری</small></span><textarea rows={2} value={customer.note} onChange={(event) => updateCustomer("note", event.target.value)} placeholder="زمان مناسب یا نکتهٔ دیگری هست؟" /></label>
                 </div>
+                {savedAddresses.length === 0 && <p className={styles.pickupNotice}>برای استفاده از نشانی‌های ذخیره‌شده، <a href="/login?redirect-to=%2Fcheckout">وارد حساب شو</a> یا آن‌ها را در <a href="/account?tab=addresses">حساب کاربری</a> ثبت کن.</p>}
                 <div className={styles.privacyNotice}><ShieldCheck size={19} aria-hidden="true" /><p>با ثبت درخواست، نام، شماره تماس و جزئیات سفارش برای پیگیری در ERPNext فروشگاه اسموله ذخیره می‌شود. پرداخت آنلاین انجام نمی‌شود و سفارش بعد از بررسی فروشگاه قطعی خواهد شد. <a href="/privacy">جزئیات حریم خصوصی</a> و <a href="/terms">شرایط استفاده</a> را بخوان.</p></div>
                 {connected && !ordersEnabled && <p className={styles.pickupNotice} role="status">ثبت سفارش آنلاین هنوز فعال نشده است؛ مدیر فروشگاه باید کالاها، قیمت و روش دریافت را تکمیل کند.</p>}
                 {message && <p className={styles.error} role="alert">{message}</p>}
@@ -204,7 +294,7 @@ export function CheckoutPage() {
                   return <div className={styles.summaryLine} key={item.id}><span>{dough.name} · {formatPersianNumber(item.sizeGrams)} گرم × {formatPersianNumber(item.quantity)}</span><strong>قیمت پس از بررسی</strong></div>;
                 })}
                 <div className={styles.total}><span>جمعِ قیمت‌های مشخص</span><strong>{formatToman(readySubtotal)}</strong></div>
-                <p>روش دریافت: {deliveryMethod === "pickup" ? "تحویل حضوری" : "ارسال"}. هزینهٔ ارسال، قیمت کوکی سفارشی و پرداخت هنوز تنظیم نشده است.</p>
+                <p>روش دریافت: {activeDeliveryMethod === "pickup" ? "تحویل حضوری" : "ارسال"}. هزینهٔ ارسال، قیمت کوکی سفارشی و پرداخت هنوز تنظیم نشده است.</p>
                 <a href="/cart">ویرایش سبد خرید</a>
                 <a className={styles.deliveryLink} href="/pickup">جزئیات روش‌های دریافت</a>
               </aside>

@@ -13,3 +13,9 @@ def after_install():
 		website_settings.home_page = "smule_storefront"
 		website_settings.save(ignore_permissions=True)
 	frappe.clear_cache()
+
+
+def after_migrate():
+	"""Keep app-owned ERPNext fields in sync when the site schema is migrated."""
+	create_custom_fields(get_custom_fields(), update=True)
+	frappe.clear_cache()

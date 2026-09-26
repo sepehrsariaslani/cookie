@@ -16,6 +16,7 @@ export type SmuleAccountOrder = {
   status: string;
   date: string;
   deliveryDate?: string;
+  requestedForTime?: string | null;
   total: number;
   paid: number;
   currency?: string;

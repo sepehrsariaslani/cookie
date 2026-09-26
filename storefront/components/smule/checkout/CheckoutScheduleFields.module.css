@@ -1,0 +1,49 @@
+.planner { grid-column: 1 / -1; display: grid; gap: .8rem; padding: .95rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--paper); }
+.heading { display: flex; align-items: flex-start; gap: .6rem; }
+.icon { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border-radius: .75rem; background: var(--gold-wash); color: var(--burgundy); }
+.heading h3 { margin: 0; color: var(--burgundy); font-size: .98rem; }
+.heading p { margin: .12rem 0 0; color: var(--ink-soft); font-size: .78rem; line-height: 1.65; }
+.scheduleOptions { display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; margin: 0; padding: 0; border: 0; }
+.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.option { display: flex; min-height: 62px; align-items: flex-start; gap: .55rem; padding: .65rem; border: 1px solid var(--line); border-radius: .8rem; background: white; cursor: pointer; transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease; }
+.option input { width: 18px; height: 18px; flex: 0 0 auto; margin: .1rem 0 0; accent-color: var(--burgundy); }
+.option > span { display: grid; gap: .12rem; }
+.option strong { color: var(--burgundy); font-size: .82rem; }
+.option small { color: var(--ink-soft); font-size: .74rem; line-height: 1.5; }
+.selected { border-color: var(--burgundy); background: color-mix(in srgb, var(--butter) 14%, white); box-shadow: inset 0 0 0 1px var(--burgundy); }
+.dateFields { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
+.dateFields label { display: grid; gap: .3rem; color: var(--burgundy); font-size: .82rem; font-weight: 650; }
+.dateFields label > span:first-child { display: flex; align-items: baseline; gap: .3rem; }
+.dateFields b { color: #a51f39; }
+.dateFields label small { color: var(--ink-soft); font-weight: 400; }
+.inputWrap { display: flex; min-height: 46px; align-items: center; gap: .45rem; padding-inline: .7rem; border: 1px solid var(--line); border-radius: .72rem; background: white; color: var(--gold-ink); }
+.inputWrap:focus-within { border-color: var(--gold-ink); box-shadow: 0 0 0 3px var(--gold-wash); }
+.inputWrap input { width: 100%; min-width: 0; min-height: 42px; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: .9rem; }
+.inputWrap input:disabled { opacity: .5; cursor: not-allowed; }
+.location { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .5rem .75rem; padding-top: .7rem; border-top: 1px solid var(--line); }
+.locationCopy { display: flex; align-items: flex-start; gap: .5rem; color: var(--gold-ink); }
+.locationCopy > svg { flex: 0 0 auto; margin-top: .12rem; }
+.locationCopy p { display: grid; gap: .1rem; margin: 0; }
+.locationCopy strong { color: var(--burgundy); font-size: .8rem; }
+.locationCopy small { color: var(--ink-soft); font-size: .73rem; line-height: 1.5; }
+.locationActions { display: flex; align-items: center; gap: .4rem; }
+.locationButton, .clearButton { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; gap: .35rem; padding: .4rem .65rem; border: 1px solid var(--line); border-radius: .7rem; background: white; color: var(--burgundy); font: inherit; font-size: .76rem; font-weight: 700; cursor: pointer; transition: background 160ms ease, border-color 160ms ease; }
+.locationButton:hover, .clearButton:hover { border-color: var(--burgundy); background: color-mix(in srgb, var(--butter) 16%, white); }
+.locationButton:disabled { opacity: .6; cursor: wait; }
+.clearButton { width: 44px; padding: 0; color: #8c1830; }
+.coordinates { grid-column: 1 / -1; justify-self: end; color: var(--ink-soft); font-size: .74rem; }
+.success, .error { grid-column: 1 / -1; margin: 0; font-size: .77rem; line-height: 1.55; }
+.success { color: #176b4d; }
+.error { color: #8c1830; }
+
+@media (max-width: 520px) {
+  .planner { padding: .75rem; }
+  .scheduleOptions, .dateFields { grid-template-columns: 1fr; }
+  .location { grid-template-columns: 1fr; }
+  .locationActions { justify-content: flex-start; }
+  .locationButton { min-width: 190px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .option, .locationButton, .clearButton { transition: none; }
+}

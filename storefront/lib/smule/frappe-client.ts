@@ -15,6 +15,8 @@ export type FrappeOrderResult = {
   readySubtotal: number;
   currency: string | null;
   paymentRequired: false;
+  requestedForDate?: string | null;
+  requestedForTime?: string | null;
 };
 
 type FrappeEnvelope<T> = { message?: T; _server_messages?: string; exception?: string };

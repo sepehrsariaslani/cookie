@@ -55,6 +55,21 @@ test("custom-cookie line is recalculated from its recipe and remains quote-requi
   assert.equal(order.customer.address, "نشانی آزمایشی");
 });
 
+test("a customer-requested pickup or delivery schedule remains attached to the order", () => {
+  const order = buildLocalOrderDraft({
+    items: [{ kind: "product", productSlug: "cinnamon-caramel", quantity: 1 }],
+    customer,
+    deliveryMethod: "delivery",
+    requestedForDate: "2026-09-28",
+    requestedForTime: "09:30",
+    id: "SM-TEST-SCHEDULE",
+  });
+
+  assert.ok(order);
+  assert.equal(order.requestedForDate, "2026-09-28");
+  assert.equal(order.requestedForTime, "09:30");
+});
+
 test("empty carts, invalid products, and invalid quantities cannot become drafts", () => {
   assert.equal(buildLocalOrderDraft({ items: [], customer, deliveryMethod: "pickup" }), null);
   assert.equal(buildLocalOrderDraft({

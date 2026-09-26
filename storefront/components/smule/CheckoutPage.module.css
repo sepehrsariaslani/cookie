@@ -26,9 +26,9 @@
 .fields label span { display: flex; align-items: baseline; gap: .3rem; }
 .fields label b { color: #a51f39; }
 .fields label small { color: var(--ink-soft); font-weight: 400; }
-.fields input, .fields textarea { width: 100%; min-height: 46px; padding: .65rem .75rem; border: 1px solid var(--line); border-radius: .75rem; background: white; color: var(--ink); font: inherit; font-size: .9rem; outline: 0; }
+.fields input, .fields textarea, .fields select { width: 100%; min-height: 46px; padding: .65rem .75rem; border: 1px solid var(--line); border-radius: .75rem; background: white; color: var(--ink); font: inherit; font-size: .9rem; outline: 0; }
 .fields textarea { resize: vertical; }
-.fields input:focus, .fields textarea:focus { border-color: var(--gold-ink); box-shadow: 0 0 0 3px var(--gold-wash); }
+.fields input:focus, .fields textarea:focus, .fields select:focus { border-color: var(--gold-ink); box-shadow: 0 0 0 3px var(--gold-wash); }
 .fields input[aria-invalid="true"], .fields textarea[aria-invalid="true"] { border-color: #a51f39; }
 .fields input[aria-invalid="true"]:focus, .fields textarea[aria-invalid="true"]:focus { box-shadow: 0 0 0 3px color-mix(in srgb, #a51f39 17%, transparent); }
 .fieldError { color: #8c1830 !important; font-size: .8rem; font-weight: 650 !important; line-height: 1.5; }

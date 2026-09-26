@@ -13,6 +13,10 @@
         {"fieldname": "customer", "fieldtype": "Link", "label": "پروندهٔ مشتری", "options": "Customer", "in_list_view": 1},
         {"fieldname": "delivery_method", "fieldtype": "Select", "label": "روش دریافت", "options": "تحویل حضوری\nارسال", "reqd": 1},
         {"fieldname": "delivery_address", "fieldtype": "Small Text", "label": "شهر و نشانی", "depends_on": "eval:doc.delivery_method=='ارسال'"},
+        {"fieldname": "requested_for_date", "fieldtype": "Date", "label": "تاریخ درخواستی دریافت", "in_list_view": 1},
+        {"fieldname": "requested_for_time", "fieldtype": "Time", "label": "ساعت ترجیحی دریافت"},
+        {"fieldname": "delivery_latitude", "fieldtype": "Float", "label": "عرض جغرافیایی محل تحویل", "hidden": 1, "read_only": 1},
+        {"fieldname": "delivery_longitude", "fieldtype": "Float", "label": "طول جغرافیایی محل تحویل", "hidden": 1, "read_only": 1},
         {"fieldname": "customer_note", "fieldtype": "Small Text", "label": "توضیحات مشتری"},
         {"fieldname": "items_section", "fieldtype": "Section Break", "label": "اقلام"},
         {"fieldname": "items", "fieldtype": "Table", "label": "اقلام درخواست", "options": "Smule Order Request Item", "reqd": 1},
@@ -21,7 +25,7 @@
         {"fieldname": "sales_order", "fieldtype": "Link", "label": "سفارش فروش ERPNext", "options": "Sales Order", "read_only": 1},
         {"fieldname": "internal_note", "fieldtype": "Small Text", "label": "یادداشت داخلی"}
     ],
-    "field_order": ["naming_series", "status", "customer_section", "customer_name", "phone", "customer", "delivery_method", "delivery_address", "customer_note", "items_section", "items", "currency", "ready_subtotal", "sales_order", "internal_note"],
+    "field_order": ["naming_series", "status", "customer_section", "customer_name", "phone", "customer", "delivery_method", "delivery_address", "requested_for_date", "requested_for_time", "delivery_latitude", "delivery_longitude", "customer_note", "items_section", "items", "currency", "ready_subtotal", "sales_order", "internal_note"],
     "permissions": [
         {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1, "export": 1, "print": 1},
         {"role": "Sales Manager", "read": 1, "write": 1, "create": 1, "export": 1, "print": 1},

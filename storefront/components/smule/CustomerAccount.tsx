@@ -18,7 +18,7 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, useSyncExternalStore, type FormEvent } from "react";
 import { CommerceFooter } from "@/components/smule/CommerceFooter";
 import { CommerceHeader } from "@/components/smule/CommerceHeader";
 import {
@@ -44,6 +44,17 @@ const tabs: Array<{ id: AccountTab; label: string; icon: typeof UserRound }> = [
   { id: "profile", label: "اطلاعات من", icon: UserRound },
   { id: "payments", label: "پرداخت‌ها", icon: CreditCard },
 ];
+
+function getAccountTabFromLocation(): AccountTab {
+  if (typeof window === "undefined") return "overview";
+  const requested = new URLSearchParams(window.location.search).get("tab");
+  return tabs.some(({ id }) => id === requested) ? requested as AccountTab : "overview";
+}
+
+function subscribeToAccountTab(onChange: () => void) {
+  window.addEventListener("popstate", onChange);
+  return () => window.removeEventListener("popstate", onChange);
+}
 
 function faDate(value?: string) {
   if (!value) return "—";
@@ -95,6 +106,7 @@ function OrderCard({ order }: { order: SmuleAccountOrder }) {
         <div className={styles.orderIdentity}>
           <strong>{order.name}</strong>
           <small>{faDate(order.date)}{order.requestName ? ` · درخواست ${order.requestName}` : ""}</small>
+          {order.deliveryDate && <small>دریافت پیشنهادی: {faDate(order.deliveryDate)}{order.requestedForTime ? ` · ${order.requestedForTime.slice(0, 5)}` : ""}</small>}
         </div>
         <span className={styles.statusPill}>{statusText(order.status)}</span>
       </div>
@@ -176,7 +188,7 @@ function AddressEditor({
 
 export function CustomerAccount() {
   const [data, setData] = useState<SmuleAccountData | null>(null);
-  const [tab, setTab] = useState<AccountTab>("overview");
+  const tab = useSyncExternalStore(subscribeToAccountTab, getAccountTabFromLocation, () => "overview");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -254,6 +266,18 @@ export function CustomerAccount() {
   const addressCount = data?.addresses?.length ?? 0;
   const paymentCount = data?.payments?.length ?? 0;
 
+  const selectTab = (nextTab: AccountTab) => {
+    if (getAccountTabFromLocation() !== nextTab) {
+      const url = new URL(window.location.href);
+      if (nextTab === "overview") url.searchParams.delete("tab");
+      else url.searchParams.set("tab", nextTab);
+      window.history.pushState(null, "", url);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }
+    setNotice("");
+    setError("");
+  };
+
   return (
     <div className={`${styles.page} commerce-page`}>
       <div className={styles.shell}>
@@ -299,13 +323,13 @@ export function CustomerAccount() {
                 <a href="/menu" className={styles.welcomeLink}>انتخاب یک طعم <ArrowLeft size={16} aria-hidden="true" /></a>
               </section>
 
-              {!data.accountReady && <div className={`${styles.setupNotice} ${data.customerSetupReady ? "" : styles.setupNoticeError}`}><ShieldCheck size={18} aria-hidden="true" /><span>{data.customerSetupReady ? "برای ثبت نشانی و پیگیری سفارش‌ها، اطلاعات تماس را یک‌بار ذخیره کن." : "مدیر فروشگاه باید ابتدا گروه مشتری و قلمرو را در ERPNext تنظیم کند؛ بعد از آن می‌توان اطلاعات را ثبت کرد."}</span>{data.customerSetupReady && <button type="button" onClick={() => setTab("profile")}>تکمیل اطلاعات</button>}</div>}
+              {!data.accountReady && <div className={`${styles.setupNotice} ${data.customerSetupReady ? "" : styles.setupNoticeError}`}><ShieldCheck size={18} aria-hidden="true" /><span>{data.customerSetupReady ? "برای ثبت نشانی و پیگیری سفارش‌ها، اطلاعات تماس را یک‌بار ذخیره کن." : "مدیر فروشگاه باید ابتدا گروه مشتری و قلمرو را در ERPNext تنظیم کند؛ بعد از آن می‌توان اطلاعات را ثبت کرد."}</span>{data.customerSetupReady && <button type="button" onClick={() => selectTab("profile")}>تکمیل اطلاعات</button>}</div>}
               {(error || notice) && <div className={`${styles.feedback} ${error ? styles.feedbackError : styles.feedbackSuccess}`} role={error ? "alert" : "status"}>{error || notice}</div>}
 
               <div className={styles.dashboardLayout}>
                 <nav className={styles.tabs} role="tablist" aria-label="بخش‌های حساب کاربری">
                   {tabs.map(({ id, label, icon: Icon }) => (
-                    <button type="button" id={`tab-${id}`} role="tab" aria-selected={tab === id} aria-controls="account-panel" className={tab === id ? styles.activeTab : ""} key={id} onClick={() => { setTab(id); setNotice(""); setError(""); }}>
+                    <button type="button" id={`tab-${id}`} role="tab" aria-selected={tab === id} aria-controls="account-panel" className={tab === id ? styles.activeTab : ""} key={id} onClick={() => selectTab(id)}>
                       <Icon size={18} aria-hidden="true" /><span>{label}</span><ChevronLeft size={15} className={styles.tabChevron} aria-hidden="true" />
                     </button>
                   ))}
@@ -316,11 +340,11 @@ export function CustomerAccount() {
                     <div className={styles.panelContent}>
                       <div className={styles.panelHeading}><div><span className={styles.eyebrow}>همه‌چیز مرتب است</span><h2>نمای کلی حساب</h2></div><button className={styles.refreshButton} type="button" onClick={() => window.location.reload()} aria-label="تازه‌سازی اطلاعات"><RefreshCw size={17} aria-hidden="true" /></button></div>
                       <div className={styles.statsGrid}>
-                        <button type="button" onClick={() => setTab("orders")}><span className={styles.statIcon}><ClipboardList size={19} aria-hidden="true" /></span><strong>{formatPersianNumber(orderCount)}</strong><small>سفارش ثبت‌شده</small></button>
-                        <button type="button" onClick={() => setTab("addresses")}><span className={styles.statIcon}><MapPin size={19} aria-hidden="true" /></span><strong>{formatPersianNumber(addressCount)}</strong><small>نشانی ذخیره‌شده</small></button>
-                        <button type="button" onClick={() => setTab("payments")}><span className={styles.statIcon}><CreditCard size={19} aria-hidden="true" /></span><strong>{formatPersianNumber(paymentCount)}</strong><small>پرداخت ثبت‌شده</small></button>
+                        <button type="button" onClick={() => selectTab("orders")}><span className={styles.statIcon}><ClipboardList size={19} aria-hidden="true" /></span><strong>{formatPersianNumber(orderCount)}</strong><small>سفارش ثبت‌شده</small></button>
+                        <button type="button" onClick={() => selectTab("addresses")}><span className={styles.statIcon}><MapPin size={19} aria-hidden="true" /></span><strong>{formatPersianNumber(addressCount)}</strong><small>نشانی ذخیره‌شده</small></button>
+                        <button type="button" onClick={() => selectTab("payments")}><span className={styles.statIcon}><CreditCard size={19} aria-hidden="true" /></span><strong>{formatPersianNumber(paymentCount)}</strong><small>پرداخت ثبت‌شده</small></button>
                       </div>
-                      <div className={styles.sectionHeading}><h3>آخرین سفارش‌ها</h3><button type="button" onClick={() => setTab("orders")}>همهٔ سفارش‌ها <ArrowLeft size={15} aria-hidden="true" /></button></div>
+                      <div className={styles.sectionHeading}><h3>آخرین سفارش‌ها</h3><button type="button" onClick={() => selectTab("orders")}>همهٔ سفارش‌ها <ArrowLeft size={15} aria-hidden="true" /></button></div>
                       {orderCount ? <div className={styles.cardList}>{data.orders?.slice(0, 2).map((order) => <OrderCard order={order} key={`${order.kind}-${order.name}`} />)}</div> : <EmptyState icon={Cookie} title="هنوز سفارشی به حساب وصل نیست" detail="از منو انتخاب کن؛ سفارش‌های ثبت‌شده پس از ورود به حسابت اینجا دیده می‌شوند." action={{ label: "دیدن منوی کوکی‌ها", href: "/menu" }} />}
                     </div>
                   )}

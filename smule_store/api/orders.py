@@ -9,6 +9,7 @@ from frappe.utils import add_days, today
 
 from smule_store.api.storefront import _get_prices
 from smule_store.domain.cookie import calculate_custom_cookie
+from smule_store.domain.scheduling import normalize_coordinates, normalize_requested_schedule
 
 MAX_ORDER_LINES = 30
 MAX_ORDER_QUANTITY = 20
@@ -181,6 +182,18 @@ def create_order_request(order=None):
 		_fail("نام مشتری را کامل وارد کن.")
 	if len(phone) < 10 or len(phone) > 15:
 		_fail("شمارهٔ تماس معتبر نیست.")
+	schedule = payload.get("schedule") or {}
+	if not isinstance(schedule, dict):
+		_fail("زمان درخواستی دریافت معتبر نیست.")
+	try:
+		requested_for_date, requested_for_time = normalize_requested_schedule(
+			schedule.get("date"), schedule.get("time"), today()
+		)
+		latitude, longitude = normalize_coordinates(
+			customer_data.get("latitude"), customer_data.get("longitude")
+		)
+	except ValueError as error:
+		_fail(str(error))
 
 	delivery = payload.get("deliveryMethod")
 	if delivery not in {"pickup", "delivery"}:
@@ -250,6 +263,10 @@ def create_order_request(order=None):
 			"customer": customer_link,
 			"delivery_method": delivery_method,
 			"delivery_address": delivery_address,
+			"requested_for_date": requested_for_date,
+			"requested_for_time": requested_for_time,
+			"delivery_latitude": latitude if delivery == "delivery" else None,
+			"delivery_longitude": longitude if delivery == "delivery" else None,
 			"customer_note": str(customer_data.get("note", ""))[:2000],
 			"currency": price_currency,
 			"items": request_items,
@@ -262,6 +279,8 @@ def create_order_request(order=None):
 		"readySubtotal": order_doc.ready_subtotal,
 		"currency": order_doc.currency,
 		"paymentRequired": False,
+		"requestedForDate": order_doc.requested_for_date,
+		"requestedForTime": order_doc.requested_for_time,
 	}
 
 
@@ -278,6 +297,8 @@ def _get_customer_group_and_territory():
 
 
 def _get_or_create_customer(order_request):
+	if order_request.customer and frappe.db.exists("Customer", order_request.customer):
+		return order_request.customer
 	customer = frappe.db.get_value("Customer", {"smule_phone_number": order_request.phone}, "name")
 	if customer:
 		return customer
@@ -349,13 +370,16 @@ def convert_to_sales_order(name):
 			"customer": customer,
 			"company": company,
 			"transaction_date": today(),
-			"delivery_date": add_days(today(), 1),
+			"delivery_date": order_request.requested_for_date or add_days(today(), 1),
 			"selling_price_list": price_list,
 			"items": so_items,
 			"smule_delivery_method": order_request.delivery_method,
 			"smule_delivery_address": order_request.delivery_address,
 			"smule_customer_note": order_request.customer_note,
 			"smule_customer_phone": order_request.phone,
+			"smule_requested_for_time": order_request.requested_for_time,
+			"smule_delivery_latitude": order_request.delivery_latitude,
+			"smule_delivery_longitude": order_request.delivery_longitude,
 			"remarks": f"درخواست وب اسموله: {order_request.name}؛ ثبت اولیهٔ پیش‌نویس، بدون دریافت وجه.",
 		}
 	)

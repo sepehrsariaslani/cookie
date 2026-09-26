@@ -197,6 +197,28 @@ def get_custom_fields():
 				"label": "شمارهٔ تماس مشتری",
 				"insert_after": "smule_customer_note",
 			},
+			{
+				"fieldname": "smule_requested_for_time",
+				"fieldtype": "Time",
+				"label": "ساعت ترجیحی دریافت اسموله",
+				"insert_after": "delivery_date",
+			},
+			{
+				"fieldname": "smule_delivery_latitude",
+				"fieldtype": "Float",
+				"label": "عرض جغرافیایی محل تحویل اسموله",
+				"hidden": 1,
+				"read_only": 1,
+				"insert_after": "smule_requested_for_time",
+			},
+			{
+				"fieldname": "smule_delivery_longitude",
+				"fieldtype": "Float",
+				"label": "طول جغرافیایی محل تحویل اسموله",
+				"hidden": 1,
+				"read_only": 1,
+				"insert_after": "smule_delivery_latitude",
+			},
 		],
 		"Sales Order Item": [
 			{

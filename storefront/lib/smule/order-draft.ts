@@ -24,6 +24,8 @@ type BuildLocalOrderInput = {
   items: DraftCartLine[];
   customer: DraftCustomer;
   deliveryMethod: "pickup" | "delivery";
+  requestedForDate?: string;
+  requestedForTime?: string;
   createdAt?: Date;
   id?: string;
   products?: SmuleProduct[];
@@ -42,7 +44,7 @@ export function getReadySubtotal(items: DraftCartLine[], products: SmuleProduct[
   }, 0);
 }
 
-export function buildLocalOrderDraft({ items, customer, deliveryMethod, createdAt = new Date(), id, products = SMULE_PRODUCTS }: BuildLocalOrderInput): SmuleOrderDraft | null {
+export function buildLocalOrderDraft({ items, customer, deliveryMethod, requestedForDate = "", requestedForTime = "", createdAt = new Date(), id, products = SMULE_PRODUCTS }: BuildLocalOrderInput): SmuleOrderDraft | null {
   if (!items.length) return null;
 
   const lines: DraftOrderLine[] = [];
@@ -90,6 +92,8 @@ export function buildLocalOrderDraft({ items, customer, deliveryMethod, createdA
     createdAt: createdAtIso,
     status: "local-draft",
     deliveryMethod,
+    requestedForDate: requestedForDate || undefined,
+    requestedForTime: requestedForDate ? requestedForTime || undefined : undefined,
     customer: {
       name: customer.name.trim(),
       phone: customer.phone.trim(),

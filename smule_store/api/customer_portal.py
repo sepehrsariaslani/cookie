@@ -189,6 +189,8 @@ def _order_history(customer):
 			"status",
 			"creation",
 			"delivery_method",
+			"requested_for_date",
+			"requested_for_time",
 			"ready_subtotal",
 			"currency",
 			"sales_order",
@@ -264,6 +266,7 @@ def _order_history(customer):
 				"paid": row.advance_paid,
 				"currency": row.currency,
 				"deliveryStatus": row.delivery_status,
+				"requestedForTime": request.requested_for_time if request else None,
 				"requestName": request.name if request else None,
 				"items": sales_items.get(row.name, []),
 			}
@@ -279,6 +282,8 @@ def _order_history(customer):
 				"kind": "order-request",
 				"status": row.status,
 				"date": row.creation,
+				"deliveryDate": row.requested_for_date,
+				"requestedForTime": row.requested_for_time,
 				"total": row.ready_subtotal,
 				"paid": 0,
 				"currency": row.currency,
@@ -339,7 +344,8 @@ def _portal_data_for_user(user):
 @frappe.whitelist(allow_guest=True)
 def get_portal_data():
 	"""Return public account-creation availability and the signed-in user's data."""
-	if frappe.session.user == "Guest":
+	user = frappe.session.user
+	if user == "Guest" or frappe.db.get_value("User", user, "user_type") != "Website User":
 		return {
 			"authenticated": False,
 			"signupEnabled": not is_signup_disabled(),
@@ -352,7 +358,6 @@ def get_portal_data():
 				)
 			),
 		}
-	user = _require_customer_user()
 	return _portal_data_for_user(user)
 
 
@@ -371,15 +376,16 @@ def _sync_contact(customer, user, full_name, phone):
 	contact.first_name = first_name
 	contact.last_name = last_name
 	contact.user = user
-	if phone:
-		primary = next((row for row in contact.phone_nos if row.is_primary_mobile_no), None)
-		for row in contact.phone_nos:
-			row.is_primary_mobile_no = 0
-		if primary:
-			primary.phone = phone
-			primary.is_primary_mobile_no = 1
-		else:
-			contact.append("phone_nos", {"phone": phone, "is_primary_mobile_no": 1})
+	primary = next((row for row in contact.phone_nos if row.is_primary_mobile_no), None)
+	for row in contact.phone_nos:
+		row.is_primary_mobile_no = 0
+	if phone and primary:
+		primary.phone = phone
+		primary.is_primary_mobile_no = 1
+	elif phone:
+		contact.append("phone_nos", {"phone": phone, "is_primary_mobile_no": 1})
+	elif primary:
+		primary.phone = None
 	contact.save(ignore_permissions=True)
 
 
@@ -400,14 +406,24 @@ def update_profile(profile=None):
 		_fail("نام و نام خانوادگی را کامل وارد کن.")
 	if phone and not 10 <= len(phone.lstrip("+")) <= 15:
 		_fail("شمارهٔ تماس باید بین ۱۰ تا ۱۵ رقم باشد.")
+	if phone:
+		other_users = frappe.get_all(
+			"User",
+			filters={"name": ["!=", user]},
+			fields=["name", "mobile_no"],
+		)
+		if any(_normalize_phone(row.mobile_no) == phone for row in other_users if row.mobile_no):
+			_fail("این شمارهٔ موبایل قبلاً به حساب دیگری وصل شده است.")
 
 	customer = _get_or_create_customer_for_user(user)
 	customer.customer_name = escape_html(full_name)
+	customer.mobile_no = phone or None
 	customer.save(ignore_permissions=True)
 	first_name, last_name = _split_name(escape_html(full_name))
 	user_doc = frappe.get_doc("User", user)
 	user_doc.first_name = first_name
 	user_doc.last_name = last_name
+	user_doc.mobile_no = phone or None
 	user_doc.save(ignore_permissions=True)
 	_sync_contact(customer, user, escape_html(full_name), phone)
 	return _portal_data_for_user(user)
