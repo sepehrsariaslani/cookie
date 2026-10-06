@@ -12,15 +12,11 @@ def ensure_smule_module_map() -> None:
 		isinstance(module_app, dict)
 		and module_app.get("smule_store") == "smule_store"
 		and isinstance(app_modules, dict)
-		and set(smule_modules).issubset(app_modules.get("smule_store", []))
+		and app_modules.get("smule_store") == smule_modules
 	):
 		return
 
-	try:
-		frappe.setup_module_map(include_all_apps=False)
-	except Exception:
-		# The app's modules.txt is enough for the local fallback when site cache is unavailable.
-		pass
+	frappe.setup_module_map(include_all_apps=False)
 	module_app = getattr(frappe.local, "module_app", None)
 	app_modules = getattr(frappe.local, "app_modules", None)
 	if not isinstance(module_app, dict):
@@ -28,9 +24,7 @@ def ensure_smule_module_map() -> None:
 	if not isinstance(app_modules, dict):
 		app_modules = frappe.local.app_modules = {}
 
-	if not smule_modules:
-		return
-
 	app_modules["smule_store"] = smule_modules
+	module_app["smule_store"] = "smule_store"
 	for module in smule_modules:
 		module_app[module] = "smule_store"

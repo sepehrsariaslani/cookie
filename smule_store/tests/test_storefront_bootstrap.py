@@ -29,15 +29,12 @@ import smule_store
 assert frappe.local.module_app.get("smule_store") == "smule_store"
 assert "smule_store" in frappe.local.app_modules.get("smule_store", [])
 
-def unavailable_site_cache(include_all_apps=False):
-    raise RuntimeError("site cache unavailable")
-
-frappe.setup_module_map = unavailable_site_cache
+frappe.get_module_list = lambda app_name: []
 frappe.local.module_app = {}
 frappe.local.app_modules = {}
 importlib.reload(smule_store)
 assert frappe.local.module_app.get("smule_store") == "smule_store"
-assert "smule_store" in frappe.local.app_modules.get("smule_store", [])
+assert frappe.local.app_modules.get("smule_store") == []
 '''
 		result = subprocess.run(
 			[sys.executable, "-c", probe, str(repo_root)],
