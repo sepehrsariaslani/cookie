@@ -2,7 +2,7 @@ import re
 
 import frappe
 from frappe.model.document import Document
-from frappe.utils import today
+from frappe.utils import now_datetime, today
 
 from smule_store.domain.scheduling import normalize_coordinates, normalize_requested_schedule
 
@@ -20,7 +20,7 @@ class SmuleOrderRequest(Document):
 			frappe.throw("برای ارسال، شهر و نشانی کامل لازم است.")
 		try:
 			self.requested_for_date, self.requested_for_time = normalize_requested_schedule(
-				self.requested_for_date, self.requested_for_time, today()
+				self.requested_for_date, self.requested_for_time, today(), now_datetime().strftime("%H:%M:%S")
 			)
 			self.delivery_latitude, self.delivery_longitude = normalize_coordinates(
 				self.delivery_latitude, self.delivery_longitude

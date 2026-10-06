@@ -5,6 +5,7 @@ from frappe.utils import getdate, today
 
 from smule_store.domain.payments import get_live_payment_configuration
 from smule_store.domain.pricing import calculate_selling_price
+from smule_store.domain.storefront_readiness import storefront_order_readiness
 
 
 ITEM_FIELDS = [
@@ -185,6 +186,11 @@ def get_catalog():
 		and settings.custom_cookie_fixed_cost is not None
 		and settings.custom_cookie_fixed_cost >= 0
 	)
+	order_readiness = storefront_order_readiness(
+		settings.online_orders_enabled,
+		payment_ready=payment_ready,
+		custom_pricing_ready=custom_pricing_ready,
+	)
 
 	products = []
 	components = []
@@ -248,8 +254,8 @@ def get_catalog():
 		"components": components,
 		"currency": price_currency,
 		"priceList": price_list,
-		"ordersEnabled": payment_ready and custom_pricing_ready,
-		"paymentsEnabled": payment_ready and custom_pricing_ready,
+		"ordersEnabled": order_readiness["orders_enabled"],
+		"paymentsEnabled": order_readiness["payments_enabled"],
 		"customPricingReady": custom_pricing_ready,
 		"pricingMarkupPercent": settings.markup_percentage if pricing_ready else None,
 		"customCookieFixedCost": settings.custom_cookie_fixed_cost if custom_pricing_ready else None,

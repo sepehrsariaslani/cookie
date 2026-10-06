@@ -1,0 +1,164 @@
+@font-face {
+  font-family: "Smule Peyda";
+  src: url("/assets/smule_store/site/fonts/peyda/Peyda-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Smule Peyda";
+  src: url("/assets/smule_store/site/fonts/peyda/Peyda-Bold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700 900;
+  font-display: swap;
+}
+
+body[data-path="login"],
+body[data-path="update-password"] {
+  --smule-auth-ink: #35111f;
+  --smule-auth-burgundy: #3b081b;
+  --smule-auth-burgundy-hover: #531128;
+  --smule-auth-butter: #f5bd4d;
+  --smule-auth-paper: #fbf7f1;
+
+  min-height: 100vh;
+  background: var(--smule-auth-paper);
+  color: var(--smule-auth-ink);
+  font-family: "Smule Peyda", Tahoma, sans-serif;
+  font-size: 16px;
+  line-height: 1.65;
+}
+
+body[data-path="login"] .page-card,
+body[data-path="update-password"] .page-card {
+  border: 1px solid rgb(59 8 27 / 10%);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 24px 72px rgb(59 8 27 / 9%);
+}
+
+body[data-path="login"] .page-card-head,
+body[data-path="update-password"] .page-card-head {
+  padding-block: 1.5rem 1.1rem;
+  text-align: center;
+}
+
+body[data-path="login"] .page-card-head .app-logo,
+body[data-path="update-password"] .page-card-head .app-logo {
+  display: none;
+}
+
+body[data-path="login"] .page-card-head::before,
+body[data-path="update-password"] .page-card-head::before {
+  display: block;
+  width: fit-content;
+  margin: 0 auto 0.7rem;
+  padding: 0.3rem 1rem;
+  border: 1px solid rgb(128 82 22 / 30%);
+  border-radius: 999px;
+  background: rgb(245 189 77 / 18%);
+  color: var(--smule-auth-burgundy);
+  content: "smule · اسموله";
+  font-size: 1.1rem;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+body[data-path="login"] .page-card-head h4,
+body[data-path="update-password"] .page-card-head h4 {
+  color: var(--smule-auth-burgundy);
+  font-family: "Smule Peyda", Tahoma, sans-serif;
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+body[data-path="login"] .page-card-body,
+body[data-path="update-password"] .page-card-body {
+  color: var(--smule-auth-ink);
+  font-family: "Smule Peyda", Tahoma, sans-serif;
+}
+
+body[data-path="login"] .form-control,
+body[data-path="update-password"] .form-control {
+  min-height: 48px;
+  border: 1px solid rgb(59 8 27 / 20%);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--smule-auth-ink);
+  font-family: "Smule Peyda", Tahoma, sans-serif;
+  font-size: 16px;
+}
+
+body[data-path="login"] .form-control:focus,
+body[data-path="update-password"] .form-control:focus {
+  border-color: var(--smule-auth-burgundy);
+  box-shadow: 0 0 0 4px rgb(245 189 77 / 38%);
+}
+
+body[data-path="login"] #login_email,
+body[data-path="login"] #login_password,
+body[data-path="login"] #forgot_email,
+body[data-path="login"] #login_with_email_link_email,
+body[data-path="login"] #mobile-login-number,
+body[data-path="login"] #mobile-login-otp,
+body[data-path="login"] #login_token,
+body[data-path="update-password"] input {
+  direction: ltr;
+  text-align: left;
+}
+
+body[data-path="login"] .btn-primary,
+body[data-path="update-password"] .btn-primary {
+  min-height: 46px;
+  border-color: var(--smule-auth-burgundy);
+  border-radius: 12px;
+  background: var(--smule-auth-burgundy);
+  color: #fff;
+  font-family: "Smule Peyda", Tahoma, sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+body[data-path="login"] .btn-primary:hover,
+body[data-path="update-password"] .btn-primary:hover {
+  border-color: var(--smule-auth-burgundy-hover);
+  background: var(--smule-auth-burgundy-hover);
+}
+
+body[data-path="login"] a,
+body[data-path="update-password"] a {
+  color: var(--smule-auth-burgundy);
+  font-weight: 600;
+  text-underline-offset: 0.18em;
+}
+
+body[data-path="login"] a:focus-visible,
+body[data-path="login"] button:focus-visible,
+body[data-path="login"] input:focus-visible,
+body[data-path="update-password"] a:focus-visible,
+body[data-path="update-password"] button:focus-visible,
+body[data-path="update-password"] input:focus-visible {
+  outline: 3px solid var(--smule-auth-burgundy);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 5px var(--smule-auth-butter);
+}
+
+@media (max-width: 480px) {
+  body[data-path="login"] .page-card,
+  body[data-path="update-password"] .page-card {
+    border-radius: 18px;
+    box-shadow: 0 12px 36px rgb(59 8 27 / 8%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-path="login"] *,
+  body[data-path="update-password"] * {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

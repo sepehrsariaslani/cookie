@@ -14,10 +14,11 @@ import { fetchCustomerAccount, type SmuleAccountAddress } from "@/lib/smule/cust
 import { sendOrderRequest } from "@/lib/smule/frappe-client";
 import { getReadySubtotal } from "@/lib/smule/order-draft";
 import { getSafeZarinpalPaymentUrl } from "@/lib/smule/payment";
+import { isRequestedTimeInPast } from "@/lib/smule/schedule";
 import { formatPersianNumber, formatToman, getSmuleProduct, toDisplayTomans } from "@/lib/smule/products";
 import styles from "./CheckoutPage.module.css";
 
-type CheckoutField = "name" | "phone" | "city" | "address" | "requestedForDate";
+type CheckoutField = "name" | "phone" | "city" | "address" | "requestedForDate" | "requestedForTime";
 type CheckoutErrors = Partial<Record<CheckoutField, string>>;
 
 function normalizePhoneNumber(value: string) {
@@ -158,8 +159,11 @@ export function CheckoutPage() {
     if (activeDeliveryMethod === "delivery" && normalizeDeliveryCity(customer.city) !== "کرج") errors.city = "ارسال اسموله فعلاً فقط در کرج انجام می‌شود.";
     if (activeDeliveryMethod === "delivery" && customer.address.trim().length < 8) errors.address = "نشانی کامل را وارد کن (حداقل ۸ نویسه).";
     if (scheduled && !requestedDate) errors.requestedForDate = "برای ثبت زمان دلخواه، تاریخ را انتخاب کن.";
+    if (scheduled && requestedDate && requestedTime && isRequestedTimeInPast(requestedDate, requestedTime)) {
+      errors.requestedForTime = "ساعت دریافت باید از زمان فعلی کرج دیرتر باشد.";
+    }
     setFieldErrors(errors);
-    const firstInvalid = (["name", "phone", "city", "address", "requestedForDate"] as CheckoutField[]).find((field) => errors[field]);
+    const firstInvalid = (["name", "phone", "city", "address", "requestedForDate", "requestedForTime"] as CheckoutField[]).find((field) => errors[field]);
     if (firstInvalid) {
       document.getElementById(`checkout-${firstInvalid}`)?.focus();
       return false;
@@ -334,18 +338,19 @@ export function CheckoutPage() {
                     locationRevision={locationRevision}
                     getCurrentLocationRevision={getCurrentLocationRevision}
                     dateError={fieldErrors.requestedForDate}
+                    timeError={fieldErrors.requestedForTime}
                     onScheduledChange={(next) => {
                       setScheduled(next);
                       if (!next) {
                         setRequestedDate("");
                         setRequestedTime("");
-                        clearFieldErrors("requestedForDate");
+                        clearFieldErrors("requestedForDate", "requestedForTime");
                       }
                     }}
                     onScheduleChange={(date, time) => {
                       setRequestedDate(date);
                       setRequestedTime(time);
-                      clearFieldErrors("requestedForDate");
+                      clearFieldErrors("requestedForDate", "requestedForTime");
                     }}
                     onCoordinatesChange={setCoordinates}
                   />

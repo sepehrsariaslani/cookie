@@ -27,6 +27,17 @@ class TestRequestedSchedule(unittest.TestCase):
 		with self.assertRaises(ValueError):
 			normalize_requested_schedule("2026-09-27", "24:10", "2026-09-26")
 
+	def test_rejects_past_or_current_time_on_the_same_day(self):
+		for requested_time in ("14:29", "14:30"):
+			with self.subTest(requested_time=requested_time), self.assertRaisesRegex(ValueError, "از زمان فعلی"):
+				normalize_requested_schedule("2026-09-26", requested_time, "2026-09-26", "14:30:00")
+
+	def test_accepts_future_time_on_the_same_day(self):
+		self.assertEqual(
+			normalize_requested_schedule("2026-09-26", "۱۴:۳۱", "2026-09-26", "14:30:00"),
+			("2026-09-26", "14:31:00"),
+		)
+
 
 class TestDeliveryCoordinates(unittest.TestCase):
 	def test_accepts_and_normalizes_valid_coordinates(self):

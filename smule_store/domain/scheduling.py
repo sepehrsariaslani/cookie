@@ -8,7 +8,7 @@ import re
 _PERSIAN_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
 
 
-def normalize_requested_schedule(requested_date, requested_time, today_value):
+def normalize_requested_schedule(requested_date, requested_time, today_value, current_time_value=None):
 	date_value = str(requested_date or "").strip().translate(_PERSIAN_DIGITS)
 	time_value = str(requested_time or "").strip().translate(_PERSIAN_DIGITS)
 	if not date_value:
@@ -30,6 +30,19 @@ def normalize_requested_schedule(requested_date, requested_time, today_value):
 		if not match:
 			raise ValueError("ساعت درخواستی را به‌صورت ۲۴ ساعته وارد کنید.")
 		time_value = f"{match.group(1)}:00"
+		if selected_date == current_date and current_time_value is not None:
+			current_time = str(current_time_value or "").strip().translate(_PERSIAN_DIGITS)
+			current_match = re.fullmatch(r"([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?", current_time)
+			if not current_match:
+				raise ValueError("ساعت جاری سامانه معتبر نیست.")
+			requested_seconds = int(match.group(1)[:2]) * 3600 + int(match.group(1)[3:]) * 60
+			current_seconds = (
+				int(current_match.group(1)) * 3600
+				+ int(current_match.group(2)) * 60
+				+ int(current_match.group(3) or 0)
+			)
+			if requested_seconds <= current_seconds:
+				raise ValueError("ساعت دریافت باید از زمان فعلی دیرتر باشد.")
 
 	return selected_date.isoformat(), time_value or None
 

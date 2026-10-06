@@ -56,7 +56,7 @@ website_route_rules = [
 # app_include_js = "/assets/smule_store/js/smule_store.js"
 
 # include js, css files in header of web template
-# web_include_css = "/assets/smule_store/css/smule_store.css"
+web_include_css = "/assets/smule_store/css/storefront-auth.css"
 # web_include_js = "/assets/smule_store/js/smule_store.js"
 
 # include custom scss in every website theme (without file extension ".scss")

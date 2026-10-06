@@ -5,7 +5,7 @@ import json
 import re
 
 import frappe
-from frappe.utils import add_days, today
+from frappe.utils import add_days, now_datetime, today
 
 from smule_store.api.storefront import _get_prices, _get_ready_product_prices
 from smule_store.domain.cookie import calculate_custom_cookie
@@ -256,7 +256,7 @@ def _read_custom_line(line, settings):
 
 @frappe.whitelist(allow_guest=True)
 def create_order_request(order=None):
-	"""Store a validated website request; never charges or submits an invoice."""
+	"""Create a validated ERPNext Sales Order and pending Payment Request."""
 	request = getattr(frappe.local, "request", None)
 	if request and request.method != "POST":
 		_fail("ثبت درخواست فقط با روش POST انجام می‌شود.")
@@ -291,7 +291,7 @@ def create_order_request(order=None):
 		_fail("زمان درخواستی دریافت معتبر نیست.")
 	try:
 		requested_for_date, requested_for_time = normalize_requested_schedule(
-			schedule.get("date"), schedule.get("time"), today()
+			schedule.get("date"), schedule.get("time"), today(), now_datetime().strftime("%H:%M:%S")
 		)
 		latitude, longitude = normalize_coordinates(
 			customer_data.get("latitude"), customer_data.get("longitude")

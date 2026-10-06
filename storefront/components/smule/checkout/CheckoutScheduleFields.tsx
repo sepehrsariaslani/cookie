@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { CalendarDays, Clock3, LocateFixed, MapPin, X } from "lucide-react";
 import { isCurrentLocationRequest } from "@/lib/smule/location-request";
+import { getStoreScheduleNow } from "@/lib/smule/schedule";
 import styles from "./CheckoutScheduleFields.module.css";
 
 export type DeliveryCoordinates = { latitude: number; longitude: number };
@@ -16,15 +17,11 @@ type CheckoutScheduleFieldsProps = {
   locationRevision: number;
   getCurrentLocationRevision: () => number;
   dateError?: string;
+  timeError?: string;
   onScheduledChange: (scheduled: boolean) => void;
   onScheduleChange: (date: string, time: string) => void;
   onCoordinatesChange: (coordinates: DeliveryCoordinates | null) => void;
 };
-
-function getLocalDateValue() {
-  const now = new Date();
-  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
-}
 
 export function CheckoutScheduleFields({
   deliveryMethod,
@@ -35,11 +32,13 @@ export function CheckoutScheduleFields({
   locationRevision,
   getCurrentLocationRevision,
   dateError,
+  timeError,
   onScheduledChange,
   onScheduleChange,
   onCoordinatesChange,
 }: CheckoutScheduleFieldsProps) {
   const locationRequestId = useRef(0);
+  const scheduleNow = getStoreScheduleNow();
   const [activeLocationRequest, setActiveLocationRequest] = useState<{ id: number; revision: number } | null>(null);
   const [locationMessageState, setLocationMessageState] = useState<{ revision: number; text: string } | null>(null);
   const [locationErrorState, setLocationErrorState] = useState<{ revision: number; text: string } | null>(null);
@@ -122,15 +121,16 @@ export function CheckoutScheduleFields({
         <label>
           <span>تاریخ پیشنهادی <b>*</b></span>
           <span className={styles.inputWrap}><CalendarDays size={17} aria-hidden="true" />
-            <input id="checkout-requested-date" type="date" min={getLocalDateValue()} required aria-invalid={Boolean(dateError)} aria-describedby={dateError ? "checkout-requested-date-error" : undefined} value={requestedDate} onChange={(event) => onScheduleChange(event.target.value, requestedTime)} />
+            <input id="checkout-requested-date" type="date" min={scheduleNow.date} required aria-invalid={Boolean(dateError)} aria-describedby={dateError ? "checkout-requested-date-error" : undefined} value={requestedDate} onChange={(event) => onScheduleChange(event.target.value, requestedTime)} />
           </span>
           {dateError && <small id="checkout-requested-date-error" className={styles.error} role="alert">{dateError}</small>}
         </label>
         <label>
           <span>ساعت ترجیحی <small>اختیاری</small></span>
           <span className={styles.inputWrap}><Clock3 size={17} aria-hidden="true" />
-            <input type="time" value={requestedTime} disabled={!requestedDate} onChange={(event) => onScheduleChange(requestedDate, event.target.value)} />
+            <input id="checkout-requested-time" type="time" min={requestedDate === scheduleNow.date ? scheduleNow.time : undefined} aria-invalid={Boolean(timeError)} aria-describedby={timeError ? "checkout-requested-time-error" : undefined} value={requestedTime} disabled={!requestedDate} onChange={(event) => onScheduleChange(requestedDate, event.target.value)} />
           </span>
+          {timeError && <small id="checkout-requested-time-error" className={styles.error} role="alert">{timeError}</small>}
         </label>
       </div>}
 
