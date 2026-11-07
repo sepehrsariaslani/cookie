@@ -6,11 +6,11 @@ import { ArrowLeft, Minus, Plus, ShoppingBasket, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCookieCart } from "@/components/smule/CartProvider";
 import { useStorefrontData } from "@/components/smule/StorefrontDataProvider";
-import { smuleAsset } from "@/lib/smule/assets";
 import { getReadySubtotal, isCheckoutAvailable } from "@/lib/smule/order-draft";
 import { CommerceFooter } from "./CommerceFooter";
 import { CommerceHeader } from "./CommerceHeader";
-import { calculateCookiePrice, DOUGHS, getToppingCapacity, getToppingName, MAX_TOPPING_COUNT } from "@/lib/smule/cookie-builder";
+import { calculateCookiePrice, getToppingCapacity, MAX_TOPPING_COUNT } from "@/lib/smule/cookie-builder";
+import { calculateLiveCookieNutrition, getBuilderVisual } from "@/lib/smule/live-cookie-builder";
 import { formatPersianNumber, formatToman, getSmuleProduct, toDisplayTomans } from "@/lib/smule/products";
 import { MAX_CART_LINE_QUANTITY, MAX_CART_LINES } from "@/lib/smule/cart-limits";
 import styles from "./CartPage.module.css";
@@ -21,10 +21,21 @@ export function CartPage() {
   const productItems = items.filter((item) => item.kind === "product");
   const customItems = items.filter((item) => item.kind === "custom");
   const readySubtotal = getReadySubtotal(items, products);
-  const customPrices = new Map(customItems.map((item) => [
-    item.id,
-    calculateCookiePrice(item.doughId, item.toppingIds, item.sizeGrams, components, currency, pricingMarkupPercent, customCookieFixedCost, priceRoundingIncrement),
-  ]));
+  const customDetails = new Map(customItems.map((item) => {
+    const dough = components.find((component) => component.kind === "Dough" && component.slug === item.doughId && !component.isSample);
+    const toppings = item.toppingIds.map((slug) => components.find((component) =>
+      (component.kind === "Topping" || component.kind === "Flavor") && component.slug === slug && !component.isSample));
+    const materialsAvailable = Boolean(dough?.isStockItem && dough.stockUom && toppings.every((component) => component?.isStockItem && component.stockUom));
+    const nutrition = dough && toppings.every(Boolean) && materialsAvailable
+      ? calculateLiveCookieNutrition(item.doughId, item.toppingIds, item.sizeGrams, components)
+      : null;
+    const price = connected && nutrition
+      ? calculateCookiePrice(item.doughId, item.toppingIds, item.sizeGrams, components, currency, pricingMarkupPercent, customCookieFixedCost, priceRoundingIncrement)
+      : null;
+    return [item.id, { dough, toppings, nutrition, price }] as const;
+  }));
+  const customPrices = new Map([...customDetails].map(([id, details]) => [id, details.price]));
+  const unavailableCustomCount = [...customDetails.values()].filter((details) => !details.nutrition).length;
   const unpricedCustomCount = [...customPrices.values()].filter((price) => price === null).length;
   const customSubtotal = unpricedCustomCount
     ? null
@@ -43,10 +54,12 @@ export function CartPage() {
       : !cartWithinServerLimits
         ? `هر سبد حداکثر ${MAX_CART_LINES} ترکیب و هر ترکیب حداکثر ${MAX_CART_LINE_QUANTITY} عدد می‌پذیرد؛ چند قلم را حذف یا کم کن.`
         : !allItemsPriced
-        ? "قیمت فروش یک یا چند قلم در ERPNext تأیید نشده؛ آن قلم‌ها را حذف کن یا پس از اصلاح کاتالوگ، صفحه را تازه کن."
+        ? unavailableCustomCount
+          ? "یک یا چند مادهٔ کوکی سفارشی دیگر در کاتالوگ ERPNext فعال یا انبارگردانی‌شده نیست؛ آن ترکیب را حذف کن یا پس از اصلاح کاتالوگ دوباره بررسی کن."
+          : "قیمت فروش یک یا چند قلم در ERPNext تأیید نشده؛ آن قلم‌ها را حذف کن یا پس از اصلاح کاتالوگ، صفحه را تازه کن."
         : "";
-  const totalWeight = customItems.reduce((total, item) => total + item.nutrition.weight * item.quantity, 0);
-  const totalCalories = customItems.reduce((total, item) => total + item.nutrition.calories * item.quantity, 0);
+  const totalWeight = customItems.reduce((total, item) => total + (customDetails.get(item.id)?.nutrition?.weight ?? 0) * item.quantity, 0);
+  const totalCalories = customItems.reduce((total, item) => total + (customDetails.get(item.id)?.nutrition?.calories ?? 0) * item.quantity, 0);
 
   return (
     <div className={`${styles.page} commerce-page`}>
@@ -117,25 +130,32 @@ export function CartPage() {
                     );
                   }
 
-                  const dough = DOUGHS.find((option) => option.id === item.doughId) ?? DOUGHS[0];
-                  const names = item.toppingIds.map(getToppingName);
-                  const overCapacity = item.toppingIds.length > MAX_TOPPING_COUNT || item.nutrition.toppingWeight > getToppingCapacity(item.sizeGrams);
+                  const details = customDetails.get(item.id);
+                  const dough = details?.dough;
+                  const names = item.toppingIds.map((slug, index) => details?.toppings[index]?.name ?? `افزودنی ناموجود (${slug})`);
+                  const nutrition = details?.nutrition;
+                  const unavailable = !nutrition;
+                  const overCapacity = item.toppingIds.length > MAX_TOPPING_COUNT || Boolean(nutrition && nutrition.toppingWeight > getToppingCapacity(item.sizeGrams));
                   const unitPrice = customPrices.get(item.id) ?? null;
+                  const visual = getBuilderVisual("Dough", item.doughId);
                   return (
                     <article className={styles.line} key={item.id}>
                       <div className={styles.cookieMark} aria-hidden="true">
-                        <img src={smuleAsset(item.doughId === "cocoa" ? "/images/smule-cookie-chocolate.png" : "/images/smule-cookie-marble-walnut.png")} alt="" />
+                        {dough?.image || visual.imagePath
+                          ? <img src={dough?.image || visual.imagePath!} alt="" />
+                          : <span className={styles.neutralCookieMark} />}
                       </div>
                       <div className={styles.lineDetails}>
                         <div className={styles.lineTitleRow}>
-                          <div><span className={styles.lineEyebrow}>کوکی سفارشی · بیس {formatPersianNumber(item.sizeGrams)} گرم · وزن نهایی حدود {formatPersianNumber(item.nutrition.weight)} گرم</span><h2>{dough.name}</h2></div>
+                          <div><span className={styles.lineEyebrow}>{unavailable ? "یکی از مواد دیگر در کاتالوگ ERPNext فعال نیست" : `کوکی سفارشی · بیس ${formatPersianNumber(item.sizeGrams)} گرم · وزن نهایی حدود ${formatPersianNumber(nutrition.weight)} گرم`}</span><h2>{dough?.name ?? "خمیر ناموجود در کاتالوگ"}</h2></div>
                           <Button className={styles.removeButton} variant="ghost" size="icon" onClick={() => removeCookie(item.id)} aria-label="حذف این کوکی از سبد"><Trash2 size={18} aria-hidden="true" /></Button>
                         </div>
-                        <p className={styles.weightBreakdown}>خمیر {formatPersianNumber(item.nutrition.doughWeight)} گرم + افزودنی‌ها {formatPersianNumber(item.nutrition.toppingWeight)} گرم</p>
+                        {nutrition && <p className={styles.weightBreakdown}>خمیر {formatPersianNumber(nutrition.doughWeight)} گرم + افزودنی‌ها {formatPersianNumber(nutrition.toppingWeight)} گرم</p>}
+                        {unavailable && <p className={styles.capacityWarning}>این ترکیب از اطلاعات فعلی ERPNext قابل تأیید نیست؛ آن را می‌توانی حذف کنی یا بعداً دوباره بررسی کنی.</p>}
                         {overCapacity && <p className={styles.capacityWarning}>این دستور از سقف فعلی سازنده بیشتر است؛ انتخاب ذخیره‌شده را نگه داشته‌ایم. ترکیب تازه را می‌توانی دوباره از سازنده تنظیم کنی.</p>}
                         <p className={styles.ingredients}><strong>ترکیب:</strong> {names.length ? names.join("، ") : "بدون تاپینگ"}</p>
                         <div className={styles.lineMeta}>
-                          <span>{unitPrice === null ? "قیمت نهایی تا تنظیم نرخ مواد مشخص نیست" : formatToman(Math.round(toDisplayTomans(unitPrice * item.quantity, currency)))} · حدود {formatPersianNumber(item.nutrition.calories)} کیلوکالری برای هر کوکی</span>
+                          <span>{unitPrice === null ? "قیمت نهایی تا تأیید دوبارهٔ مواد و نرخ‌ها مشخص نیست" : formatToman(Math.round(toDisplayTomans(unitPrice * item.quantity, currency)))}{nutrition ? ` · حدود ${formatPersianNumber(nutrition.calories)} کیلوکالری برای هر کوکی` : ""}</span>
                           <div className={styles.quantity} aria-label="تعداد کوکی از این ترکیب">
                             <button type="button" disabled={item.quantity <= 1} onClick={() => setQuantity(item.id, item.quantity - 1)} aria-label="کم‌کردن تعداد"><Minus size={15} aria-hidden="true" /></button>
                             <strong aria-live="polite">{formatPersianNumber(item.quantity)}</strong>
@@ -159,14 +179,16 @@ export function CartPage() {
                   {totalCalories > 0 && <div><dt>کالری سفارشی تقریبی</dt><dd>{formatPersianNumber(totalCalories)} kcal</dd></div>}
                 </dl>
                 <p className={styles.priceNotice}>{!connected
-                  ? "اتصال ERPNext در دسترس نیست؛ قیمت‌های نمایشی صرفاً نمونه‌اند و سفارش ثبت نمی‌شود."
+                  ? "اتصال ERPNext در دسترس نیست؛ قیمت و موجودی قابل تأیید نیست و سفارش ثبت نمی‌شود."
                   : !allItemsPriced
                     ? customItems.length
-                      ? "برای قیمت زنده، بهای خرید هر گرم خمیر و افزودنی‌های انتخابی و تنظیم قانون قیمت‌گذاری باید در ERPNext کامل باشد."
-                      : "قیمت واقعی این محصول و BOM تأییدشده هنوز در کاتالوگ فروشگاه موجود نیست."
+                      ? unavailableCustomCount
+                        ? "ترکیب سفارشی ذخیره‌شده با کاتالوگ فعلی ERPNext منطبق نیست؛ تا فعال‌بودن همهٔ مواد و نرخ‌هایشان امکان ثبت سفارش نیست."
+                        : "برای قیمت زنده، بهای خرید هر گرم خمیر و افزودنی‌های انتخابی و تنظیم قانون قیمت‌گذاری باید در ERPNext کامل باشد."
+                      : "قیمت فروش یا موجودی این محصول در ERPNext تأیید نشده است."
                     : customItems.length
                       ? "قیمت سفارشی از بهای مواد و هزینهٔ ثابت، با درصد افزوده و گردکردن رو به بالا محاسبه می‌شود؛ هزینهٔ پیک جداست."
-                      : "قیمت کوکی آماده بر اساس بهای BOM تأییدشده، درصد افزوده و گام گردکردن ERPNext محاسبه می‌شود."}</p>
+                      : "قیمت کوکی آماده از لیست قیمت فروش ERPNext خوانده می‌شود و موجودی انبار نیز دوباره بررسی خواهد شد."}</p>
                 {checkoutAvailable
                   ? <a className={styles.continueButton} href="/checkout">ادامه و ثبت اطلاعات <ArrowLeft size={17} aria-hidden="true" /></a>
                   : <button className={styles.continueButton} type="button" disabled aria-describedby="cart-checkout-status">ثبت سفارش فعلاً در دسترس نیست</button>}

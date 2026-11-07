@@ -4,15 +4,18 @@ import frappe
 from frappe.utils import getdate, today
 
 from smule_store.domain.payments import get_live_payment_configuration
-from smule_store.domain.pricing import calculate_selling_price
+from smule_store.domain.storefront_catalog import component_catalog_fields, get_stock_status, product_price_fields
 from smule_store.domain.storefront_readiness import storefront_order_readiness
 
 
 ITEM_FIELDS = [
 	"name",
 	"item_name",
+	"description",
 	"image",
+	"item_group",
 	"stock_uom",
+	"is_stock_item",
 	"is_sales_item",
 	"smule_slug",
 	"smule_display_name_fa",
@@ -93,55 +96,6 @@ def _get_prices(item_codes, price_list, uom=None, selling=True):
 	return prices
 
 
-def _get_ready_product_prices(item_codes, settings):
-	item_codes = list(dict.fromkeys(item_codes or []))
-	if not item_codes or not settings.company:
-		return {}
-	boms = frappe.get_all(
-		"BOM",
-		filters={
-			"item": ["in", item_codes],
-			"company": settings.company,
-			"is_active": 1,
-			"is_default": 1,
-			"docstatus": 1,
-		},
-		fields=["name", "item", "quantity", "base_total_cost"],
-		order_by="modified desc",
-		limit_page_length=max(2, len(item_codes) * 2),
-	)
-	boms_by_item = {}
-	for bom in boms:
-		boms_by_item.setdefault(bom.item, []).append(bom)
-
-	prices = {}
-	for item_code in item_codes:
-		item_boms = boms_by_item.get(item_code, [])
-		if len(item_boms) != 1 or not item_boms[0].quantity or not item_boms[0].base_total_cost:
-			continue
-		bom = item_boms[0]
-		unit_cost = bom.base_total_cost / bom.quantity
-		try:
-			pricing = calculate_selling_price(
-				unit_cost,
-				settings.markup_percentage,
-				settings.price_rounding_increment,
-			)
-		except ValueError:
-			continue
-		prices[item_code] = {
-			**pricing,
-			"bom_name": bom.name,
-			"bom_quantity": bom.quantity,
-			"bom_total_cost": bom.base_total_cost,
-		}
-	return prices
-
-
-def _get_ready_product_price(item_code, settings):
-	return _get_ready_product_prices([item_code], settings).get(item_code)
-
-
 @frappe.whitelist(allow_guest=True)
 def get_catalog():
 	"""Return only explicitly enabled products/components and configured live prices."""
@@ -158,7 +112,20 @@ def get_catalog():
 	component_codes = [
 		item.name for item in items if item.smule_storefront_type in {"Dough", "Topping", "Flavor"}
 	]
+	product_codes = [item.name for item in items if item.smule_storefront_type == "Product" and item.is_sales_item]
+	product_prices = _get_prices(product_codes, price_list)
 	component_prices = _get_prices(component_codes, settings.material_cost_price_list, uom="Gram", selling=False)
+	bin_stock = {}
+	if settings.sales_warehouse and product_codes:
+		bin_stock = {
+			row.item_code: row
+			for row in frappe.get_all(
+				"Bin",
+				filters={"item_code": ["in", product_codes], "warehouse": settings.sales_warehouse},
+				fields=["item_code", "actual_qty", "reserved_qty"],
+				limit_page_length=len(product_codes),
+			)
+		}
 	price_currency = frappe.db.get_value("Price List", price_list, "currency") if price_list else None
 	payment_ready = bool(get_live_payment_configuration(settings))
 	material_price_list = frappe.db.get_value(
@@ -200,9 +167,9 @@ def get_catalog():
 			"slug": item.smule_slug or item.name,
 			"name": item.smule_display_name_fa or item.item_name,
 			"shortName": item.smule_display_name_fa or item.item_name,
-			"description": item.smule_description_fa or "",
+			"description": item.smule_description_fa or item.description or "",
 			"serving": item.smule_serving_description_fa or "",
-			"category": item.smule_category_fa or "کوکی",
+			"category": item.smule_category_fa or item.item_group or "کوکی",
 			"image": item.image or "",
 			"ingredients": _split_fa_list(item.smule_ingredients_fa),
 			"notIncluded": _split_fa_list(item.smule_not_included_fa),
@@ -224,14 +191,21 @@ def get_catalog():
 		}
 
 		if item.smule_storefront_type == "Product" and item.is_sales_item:
-			pricing = _get_ready_product_price(item.name, settings) if pricing_ready else None
-			if not pricing or not pricing["unit_price"] or item.smule_recipe_is_sample:
-				continue
+			price = product_price_fields(product_prices.get(item.name))
+			bin_row = bin_stock.get(item.name)
+			stock = get_stock_status(
+				item.is_stock_item,
+				settings.sales_warehouse,
+				actual_qty=bin_row.actual_qty if bin_row else 0,
+				reserved_qty=bin_row.reserved_qty if bin_row else 0,
+			)
 			entry.update(
 				{
-					"price": pricing["unit_price"],
-					"currency": price_currency,
-					"priceBasis": "default-submitted-bom-cost-plus-markup",
+					**price,
+					"priceBasis": "native-item-price",
+					"isAvailable": stock["available"],
+					"availableQty": stock["availableQty"],
+					"availabilityReason": stock["availabilityReason"],
 					"serving": entry["serving"]
 					or (f"یک عدد · حدود {int(item.smule_base_weight_grams or 0)} گرم" if item.smule_base_weight_grams else "یک عدد"),
 				}
@@ -239,7 +213,7 @@ def get_catalog():
 			products.append(entry)
 		elif item.smule_storefront_type in {"Dough", "Topping", "Flavor"}:
 			entry["id"] = entry["slug"]
-			entry["name"] = entry["name"]
+			entry.update(component_catalog_fields(item))
 			component_price = component_prices.get(item.name)
 			entry["costPerGram"] = (
 				component_price.price_list_rate

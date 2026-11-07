@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { DoughId, ToppingId } from "@/lib/smule/cookie-builder";
 import { smuleAsset } from "@/lib/smule/assets";
+import { getBuilderVisual } from "@/lib/smule/live-cookie-builder";
 import { disposeModel } from "./disposeModel";
 
 export type CustomAppearance = { dough: DoughId; toppings: ToppingId[]; sizeGrams: number };
@@ -67,9 +68,11 @@ export function createCookieBuilderScene(
   void ingredients.catch(() => undefined);
 
   function loadDough(id: DoughId): Promise<THREE.Group> {
+    const visual = getBuilderVisual("Dough", id);
+    if (!visual.modelId) return Promise.reject(new Error("No authored dough model for this live ERPNext component."));
     const cached = requests.get(id);
     if (cached) return cached;
-    const request = loader.loadAsync(smuleAsset(`/models/builder-dough/${id}.glb`)).then(({ scene }) => {
+    const request = loader.loadAsync(smuleAsset(`/models/builder-dough/${visual.modelId}.glb`)).then(({ scene }) => {
       if (disposed) { disposeModel(scene); return scene; }
       prepare(scene);
       scene.visible = false;

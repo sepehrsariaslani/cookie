@@ -1,12 +1,15 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { smuleAsset } from "@/lib/smule/assets";
+import { mapCatalogProducts } from "@/lib/smule/catalog";
 import { fetchStorefrontCatalog, type FrappeStorefrontCatalog } from "@/lib/smule/frappe-client";
-import { formatPersianNumber, SMULE_PRODUCTS, type SmuleProduct } from "@/lib/smule/products";
+import type { SmuleProduct } from "@/lib/smule/products";
 
 export type StorefrontComponent = {
   itemCode: string;
+  image: string;
+  stockUom: string;
+  isStockItem: boolean;
   id: string;
   slug: string;
   kind: string;
@@ -45,7 +48,7 @@ type StorefrontData = {
 };
 
 const previewState: StorefrontData = {
-  products: SMULE_PRODUCTS,
+  products: [],
   components: [],
   loading: true,
   connected: false,
@@ -82,6 +85,9 @@ function mapComponents(rows: FrappeStorefrontCatalog["components"]): StorefrontC
     const nutrition = row.nutrition && typeof row.nutrition === "object" ? row.nutrition as Record<string, unknown> : {};
     return {
       itemCode: asString(row.itemCode),
+      image: asString(row.image),
+      stockUom: asString(row.stockUom),
+      isStockItem: Boolean(row.isStockItem),
       id: asString(row.id, asString(row.slug)),
       slug: asString(row.slug),
       kind: asString(row.kind),
@@ -110,41 +116,6 @@ function mapComponents(rows: FrappeStorefrontCatalog["components"]): StorefrontC
   });
 }
 
-function mapProducts(rows: FrappeStorefrontCatalog["products"], currency: string | null): SmuleProduct[] {
-  return rows.map((row, index) => {
-    const nutrition = row.nutrition && typeof row.nutrition === "object" ? row.nutrition as Record<string, unknown> : {};
-    const itemPrice = asNumber(row.price);
-    // ERPNext stores Iranian rial; the customer-facing Smule UI uses toman.
-    const displayPrice = currency === "IRR" ? Math.round(itemPrice / 10) : itemPrice;
-    const image = asString(row.image);
-    return {
-      category: asString(row.category, "کوکی"),
-      slug: asString(row.slug),
-      number: formatPersianNumber(index + 1).padStart(2, "۰"),
-      name: asString(row.name),
-      shortName: asString(row.shortName, asString(row.name)),
-      description: asString(row.description),
-      price: displayPrice,
-      className: ["product-classic", "product-salt", "product-caramel", "product-mini"][index % 4],
-      image: image ? smuleAsset(image) : smuleAsset("/images/smule-cookie.png"),
-      imageIsSample: !image,
-      imageFilter: "none",
-      serving: asString(row.serving, "یک عدد"),
-      nutrition: {
-        calories: asNumber(nutrition.calories),
-        protein: asNumber(nutrition.protein),
-        carbohydrates: asNumber(nutrition.carbohydrates),
-        fat: asNumber(nutrition.fat),
-        sugar: asNumber(nutrition.sugar),
-      },
-      ingredients: asList(row.ingredients),
-      notIncluded: asList(row.notIncluded),
-      allergens: asList(row.allergens),
-      isSample: Boolean(row.isSample),
-    };
-  });
-}
-
 export function StorefrontDataProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState(previewState);
 
@@ -165,11 +136,8 @@ export function StorefrontDataProvider({ children }: { children: ReactNode }) {
 
 function mapCatalog(catalog: FrappeStorefrontCatalog): StorefrontData {
   const currency = typeof catalog.currency === "string" ? catalog.currency : null;
-  const liveProducts = mapProducts(catalog.products, currency);
   return {
-    // Keep the sample menu browsable until real Items and verified prices exist.
-    // Every sample remains explicitly marked and cannot be added to an order.
-    products: liveProducts.length ? liveProducts : SMULE_PRODUCTS,
+    products: mapCatalogProducts(catalog.products, currency),
     components: mapComponents(catalog.components),
     loading: false,
     connected: true,

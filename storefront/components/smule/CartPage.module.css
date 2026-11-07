@@ -12,6 +12,7 @@
 .lineUnpriced { grid-template-columns: minmax(0, 1fr); }
 .cookieMark { display: grid; width: 68px; height: 68px; overflow: hidden; place-items: center; border: 1px solid color-mix(in srgb, var(--gold-ink) 24%, transparent); border-radius: 1rem; background: var(--cream); }
 .cookieMark img { width: 100%; height: 100%; object-fit: cover; }
+.neutralCookieMark { width: 44px; height: 44px; border: 1px solid color-mix(in srgb, var(--gold-ink) 28%, transparent); border-radius: 50%; background: radial-gradient(ellipse at 34% 28%, #efd4a5 0 9%, transparent 10%), radial-gradient(ellipse at 66% 36%, #d8ad74 0 8%, transparent 9%), linear-gradient(145deg, #dfbd8d, #bb8557 72%, #9a6547); box-shadow: inset -4px -5px 8px #70432b30, 0 4px 7px #33110a1c; }
 .lineDetails { min-width: 0; }
 .lineTitleRow { display: flex; align-items: start; justify-content: space-between; gap: .5rem; }
 .lineEyebrow { color: var(--gold-ink); font-size: .78rem; font-weight: 700; }

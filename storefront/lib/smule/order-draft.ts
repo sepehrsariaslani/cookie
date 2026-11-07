@@ -55,7 +55,7 @@ export function getReadySubtotal(items: DraftCartLine[], products: SmuleProduct[
   for (const item of productItems) {
     const product = getSmuleProduct(item.productSlug, products);
     const quantity = normalizeQuantity(item.quantity);
-    if (!product || product.isSample || !Number.isFinite(product.price) || product.price <= 0 || !quantity) {
+    if (!product || product.isSample || product.isAvailable !== true || !Number.isFinite(product.price) || product.price <= 0 || !quantity) {
       return null;
     }
     subtotal += product.price * quantity;
@@ -73,7 +73,7 @@ export function buildLocalOrderDraft({ items, customer, deliveryMethod, requeste
 
     if (item.kind === "product") {
       const product = getSmuleProduct(item.productSlug, products);
-      if (!product || product.isSample || !Number.isFinite(product.price) || product.price <= 0) return null;
+      if (!product || product.isSample || product.isAvailable !== true || !Number.isFinite(product.price) || product.price <= 0) return null;
       lines.push({
         kind: "product",
         productSlug: product.slug,

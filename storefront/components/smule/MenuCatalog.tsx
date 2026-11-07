@@ -46,11 +46,13 @@ export function MenuCatalog() {
               ))}
             </div>
           </section>
-          <p className={styles.dataNotice} role="status">{connected && products.length > 0 && products.every((product) => product.isSample)
-            ? "این طعم‌ها، قیمت‌ها و ارزش غذایی فقط نمونهٔ نمایشی‌اند؛ سفارش پس از ثبت و تأیید اطلاعات واقعی در ERPNext فعال می‌شود."
-            : connected
-              ? "کالاها و قیمت‌ها از ERPNext می‌آیند؛ ارزش غذایی فقط در صورت تکمیل اطلاعات هر کالا نمایش داده می‌شود."
-            : loading ? "در حال اتصال به فهرست فروشگاه…" : error || "فهرست منو از فروشگاه دریافت نشد."}</p>
+          <p className={styles.dataNotice} role="status">{loading
+            ? "در حال اتصال به فهرست فروشگاه…"
+            : !connected
+              ? error || "فهرست منو از ERPNext دریافت نشد."
+              : products.length
+                ? "کالا، قیمت و موجودی از ERPNext می‌آیند؛ اطلاعات تغذیه‌ای فقط در صورت ثبت برای هر کالا نمایش داده می‌شود."
+                : "فهرست به ERPNext وصل است؛ هنوز کالایی برای نمایش در فروشگاه منتشر نشده است."}</p>
 
           {shownProducts.length ? (
             <section className={styles.grid} aria-label="محصولات منو">
@@ -74,8 +76,14 @@ export function MenuCatalog() {
             </section>
           ) : (
             <div className={styles.empty}>
-              <h2>{loading ? "در حال بارگذاری منو" : connected && !products.length ? "منوی فروشگاه هنوز آماده نشده" : "این طعم را پیدا نکردیم"}</h2>
-              <p>{connected && !products.length ? "برای نمایش هر محصول، آن را در ERPNext فعال و قیمت فروش تأییدشده ثبت کن." : "نام طعم یا یکی از مواد اولیه را کوتاه‌تر بنویس."}</p>
+              <h2>{loading ? "در حال بارگذاری منو" : !connected ? "دریافت منو ممکن نشد" : !products.length ? "منوی فروشگاه هنوز آماده نشده" : "این طعم را پیدا نکردیم"}</h2>
+              <p>{loading
+                ? "کالاهای منتشرشده و وضعیت انبار از ERPNext دریافت می‌شوند."
+                : !connected
+                  ? error || "اتصال به ERPNext را بررسی کن."
+                  : !products.length
+                    ? "برای نمایش محصول، آن را در ERPNext منتشر کن و قیمت و انبار فروش را تنظیم کن."
+                    : "نام طعم یا یکی از مواد اولیه را کوتاه‌تر بنویس."}</p>
               {query && <button type="button" onClick={() => setQuery("")}>پاک‌کردن جست‌وجو</button>}
             </div>
           )}

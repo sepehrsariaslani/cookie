@@ -4,15 +4,13 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  calculateCookieNutrition,
-  DOUGHS,
   MAX_COOKIE_GRAMS,
   MIN_COOKIE_GRAMS,
-  TOPPINGS,
   type CookieNutrition,
   type DoughId,
   type ToppingId,
 } from "@/lib/smule/cookie-builder";
+import { normalizeSavedCookieNutrition } from "@/lib/smule/live-cookie-builder";
 import { addCartLine, normalizeCartQuantity, type CartAddResult } from "@/lib/smule/cart-limits";
 
 const STORAGE_KEY = "smule-cookie-cart-v1";
@@ -75,7 +73,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
       if (saved) {
         const parsed: unknown = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          const knownToppings = new Set(TOPPINGS.map(({ id }) => id));
           const restored = parsed.flatMap((entry): CartLine[] => {
             if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
             const savedKind = (entry as { kind?: unknown }).kind;
@@ -93,10 +90,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
             }
             const savedLine = entry as Partial<CookieCartLine>;
             if (typeof savedLine.id !== "string" || typeof savedLine.sizeGrams !== "number" || !Number.isFinite(savedLine.sizeGrams)) return [];
-            const doughId = DOUGHS.some(({ id }) => id === savedLine.doughId) ? savedLine.doughId as DoughId : DOUGHS[0].id;
+            const doughId = typeof savedLine.doughId === "string" ? savedLine.doughId : "";
             const sizeGrams = Math.min(MAX_COOKIE_GRAMS, Math.max(MIN_COOKIE_GRAMS, Math.round(savedLine.sizeGrams / 5) * 5));
             const toppingIds = Array.isArray(savedLine.toppingIds)
-              ? savedLine.toppingIds.filter((id): id is ToppingId => typeof id === "string" && knownToppings.has(id as ToppingId))
+              ? savedLine.toppingIds.filter((id): id is ToppingId => typeof id === "string" && id.length > 0)
               : [];
             const quantity = normalizeCartQuantity(savedLine.quantity);
             return [{
@@ -107,7 +104,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
               doughId,
               sizeGrams,
               toppingIds,
-              nutrition: calculateCookieNutrition(doughId, toppingIds, sizeGrams),
+              nutrition: normalizeSavedCookieNutrition(savedLine.nutrition),
               quantity,
             }];
           });

@@ -12,26 +12,24 @@ import { useCookieCart } from "@/components/smule/CartProvider";
 import { MAX_CART_LINE_QUANTITY, MAX_CART_LINES } from "@/lib/smule/cart-limits";
 import { CookieCanvas } from "@/components/smule/CookieStory";
 import {
-  canAddTopping,
   calculateCookiePrice,
-  calculateCookieNutrition,
   COOKIE_GRAM_STEP,
   COOKIE_SIZES,
-  DOUGHS,
-  getDoughImage,
-  getToppingAmountForBase,
   getToppingCapacity,
-  getToppingImage,
   MAX_TOPPING_COUNT,
   MAX_COOKIE_GRAMS,
   MIN_COOKIE_GRAMS,
-  TOPPING_GROUPS,
-  TOPPINGS,
   type DoughId,
-  type DoughOption,
   type ToppingId,
-  type ToppingOption,
 } from "@/lib/smule/cookie-builder";
+import {
+  calculateLiveCookieNutrition,
+  canAddLiveTopping,
+  getBuilderVisual,
+  getLiveToppingAmount,
+  getLiveToppingGroupTitle,
+  mapLiveCookieComponents,
+} from "@/lib/smule/live-cookie-builder";
 import { formatPersianNumber, formatToman, toDisplayTomans } from "@/lib/smule/products";
 import { CommerceHeader } from "./CommerceHeader";
 import { CommerceFooter } from "./CommerceFooter";
@@ -40,71 +38,40 @@ import styles from "./CookieBuilder.module.css";
 
 export function CookieBuilder() {
   const { addCookie, itemCount, ready } = useCookieCart();
-  const { components, connected, ordersEnabled, currency, pricingMarkupPercent, customCookieFixedCost, priceRoundingIncrement } = useStorefrontData();
-  const [dough, setDough] = useState<DoughId>("marble");
+  const { components, loading, error, connected, ordersEnabled, currency, pricingMarkupPercent, customCookieFixedCost, priceRoundingIncrement } = useStorefrontData();
+  const [dough, setDough] = useState<DoughId>("");
   const [sizeGrams, setSizeGrams] = useState(50);
   const [toppings, setToppings] = useState<ToppingId[]>([]);
   const [cartLimitMessage, setCartLimitMessage] = useState("");
-  const doughOptions = useMemo(() => {
-    if (!connected) return DOUGHS;
-    return DOUGHS.flatMap((option) => {
-      const component = components.find((row) => row.kind === "Dough" && row.slug === option.id);
-      if (!component) return [];
-      return [{
-        ...option,
-        name: component.name || option.name,
-        note: component.description || option.note,
-        ingredients: component.ingredients.length ? component.ingredients : option.ingredients,
-        allergens: component.allergens,
-        visualColor: component.visualColor || option.visualColor,
-        recipe: component.nutrition,
-      } satisfies DoughOption];
-    });
-  }, [components, connected]);
-  const toppingOptions = useMemo(() => {
-    if (!connected) return TOPPINGS;
-    return TOPPINGS.flatMap((option) => {
-      const component = components.find((row) =>
-        ["Topping", "Flavor"].includes(row.kind) && row.slug === option.id,
-      );
-      if (!component) return [];
-      const liveGroup = TOPPING_GROUPS.some((group) => group.id === component.group)
-        ? component.group as ToppingOption["group"]
-        : option.group;
-      return [{
-        ...option,
-        name: component.name || option.name,
-        note: component.description || option.note,
-        group: liveGroup,
-        gramsPer50: component.gramsPer50,
-        allergens: component.allergens,
-        visualGroup: component.visualGroup as ToppingOption["visualGroup"],
-        visualColor: component.visualColor || option.visualColor,
-        recipe: component.nutrition,
-      } satisfies ToppingOption];
-    });
-  }, [components, connected]);
-  const selectedDough = doughOptions.find((option) => option.id === dough) ?? doughOptions[0] ?? DOUGHS[0];
-  const activeDough = selectedDough.id;
+  const liveOptions = useMemo(() => mapLiveCookieComponents(connected ? components : []), [components, connected]);
+  const doughOptions = liveOptions.doughs;
+  const toppingOptions = liveOptions.toppings;
+  const activeDough = doughOptions.some((option) => option.id === dough) ? dough : doughOptions[0]?.id ?? "";
+  const selectedDough = doughOptions.find((option) => option.id === activeDough);
   const activeToppings = useMemo(
     () => toppings.filter((id) => toppingOptions.some((option) => option.id === id)),
     [toppingOptions, toppings],
   );
-  const nutrition = useMemo(
-    () => calculateCookieNutrition(activeDough, activeToppings, sizeGrams, components),
+  const calculatedNutrition = useMemo(
+    () => activeDough ? calculateLiveCookieNutrition(activeDough, activeToppings, sizeGrams, components) : null,
     [activeDough, activeToppings, components, sizeGrams],
   );
+  const nutrition = calculatedNutrition ?? {
+    baseWeight: 0, weight: 0, doughWeight: 0, toppingWeight: 0, toppingAmounts: {},
+    calories: 0, protein: 0, carbohydrates: 0, fat: 0, sugar: 0,
+  };
   const selectedToppings = toppingOptions.filter(({ id }) => activeToppings.includes(id));
   const selectedNames = selectedToppings.map(({ name }) => name);
-  const allergenNames = [...new Set([...selectedDough.allergens, ...selectedToppings.flatMap(({ allergens }) => allergens)])];
+  const allergenNames = [...new Set([...(selectedDough?.allergens ?? []), ...selectedToppings.flatMap(({ allergens }) => allergens)])];
   const toppingCapacity = getToppingCapacity(sizeGrams);
   const remainingCapacity = Math.max(0, Number((toppingCapacity - nutrition.toppingWeight).toFixed(1)));
-  const hasBlockedToppings = toppingOptions.some(({ id }) => !activeToppings.includes(id) && !canAddTopping(activeToppings, id, sizeGrams, components));
+  const hasBlockedToppings = toppingOptions.some(({ id }) => !activeToppings.includes(id) && !canAddLiveTopping(activeToppings, id, sizeGrams, components));
+  const toppingGroups = [...new Set(toppingOptions.map((option) => option.group || ""))];
   const cookiePrice = useMemo(
-    () => connected
+    () => connected && activeDough && calculatedNutrition
       ? calculateCookiePrice(activeDough, activeToppings, sizeGrams, components, currency, pricingMarkupPercent, customCookieFixedCost, priceRoundingIncrement)
       : null,
-    [activeDough, activeToppings, connected, components, currency, customCookieFixedCost, priceRoundingIncrement, pricingMarkupPercent, sizeGrams],
+    [activeDough, activeToppings, calculatedNutrition, connected, components, currency, customCookieFixedCost, priceRoundingIncrement, pricingMarkupPercent, sizeGrams],
   );
   const displayCookiePrice = cookiePrice === null ? null : Math.round(toDisplayTomans(cookiePrice, currency));
 
@@ -113,12 +80,13 @@ export function CookieBuilder() {
     setToppings((current) => {
       const available = current.filter((item) => toppingOptions.some((option) => option.id === item));
       if (!enabled) return available.filter((item) => item !== id);
-      return canAddTopping(available, id, sizeGrams, components) ? [...available, id] : available;
+      return canAddLiveTopping(available, id, sizeGrams, components) ? [...available, id] : available;
     });
   }
 
   function buildAndAddCookie() {
-    const result = addCookie({ doughId: activeDough, sizeGrams, toppingIds: activeToppings, nutrition });
+    if (!activeDough || !calculatedNutrition) return;
+    const result = addCookie({ doughId: activeDough, sizeGrams, toppingIds: activeToppings, nutrition: calculatedNutrition });
     if (result !== "added") {
       setCartLimitMessage(result === "quantity-limit"
         ? `از این ترکیب حداکثر ${MAX_CART_LINE_QUANTITY} عدد می‌توانی در سبد داشته باشی.`
@@ -132,7 +100,7 @@ export function CookieBuilder() {
 
   function resetBuilder() {
     setCartLimitMessage("");
-    setDough(doughOptions.some((option) => option.id === "marble") ? "marble" : doughOptions[0]?.id ?? "marble");
+    setDough(doughOptions[0]?.id ?? "");
     setSizeGrams(50);
     setToppings([]);
   }
@@ -209,15 +177,20 @@ export function CookieBuilder() {
                   setDough(value as DoughId);
                 }}
               >
+                {loading && <p role="status">در حال دریافت خمیرها و افزودنی‌های فعال از ERPNext…</p>}
+                {!loading && (!connected || error) && <p role="status">ارتباط کاتالوگ برقرار نیست؛ برای جلوگیری از نمایش اطلاعات نمونه، فعلاً امکان ساخت کوکی وجود ندارد.</p>}
+                {!loading && connected && doughOptions.length === 0 && <p role="status">هنوز خمیر فعالی در کاتالوگ ERPNext برای سازنده منتشر نشده است.</p>}
                 {doughOptions.map((option) => (
-                  <label className={`${styles.doughOption} ${dough === option.id ? styles.selectedDough : ""}`} key={option.id} htmlFor={`dough-${option.id}`}>
-                    <img className={styles.doughSwatch} src={getDoughImage(option.id)} alt="" width={48} height={48} loading="lazy" />
+                  <label className={`${styles.doughOption} ${activeDough === option.id ? styles.selectedDough : ""}`} key={option.id} htmlFor={`dough-${encodeURIComponent(option.id)}`}>
+                    {option.image || getBuilderVisual("Dough", option.id).imagePath
+                      ? <img className={styles.doughSwatch} src={option.image || getBuilderVisual("Dough", option.id).imagePath!} alt="" width={48} height={48} loading="lazy" />
+                      : <span className={styles.doughSwatch} style={{ backgroundColor: option.visualColor }} aria-hidden="true" />}
                     <span className={styles.optionCopy}>
                       <strong>{option.name}</strong>
                       <small>{option.note}</small>
                       <span className={styles.baseIngredients}>{option.ingredients.join(" · ")}</span>
                     </span>
-                    <RadioGroupItem className={styles.radio} id={`dough-${option.id}`} value={option.id} aria-label={option.name} />
+                    <RadioGroupItem className={styles.radio} id={`dough-${encodeURIComponent(option.id)}`} value={option.id} aria-label={option.name} />
                   </label>
                 ))}
               </RadioGroup>
@@ -239,13 +212,13 @@ export function CookieBuilder() {
                   : `${formatPersianNumber(remainingCapacity)} گرم ظرفیت افزودنی باقی مانده است.`}</p>
               </div>
               <div className={styles.groups}>
-                {TOPPING_GROUPS.filter((group) => toppingOptions.some((option) => option.group === group.id)).map((group) => {
-                  const options = toppingOptions.filter((option) => option.group === group.id);
+                {toppingGroups.map((group, groupIndex) => {
+                  const options = toppingOptions.filter((option) => option.group === group);
                   const selectedCount = options.filter((option) => activeToppings.includes(option.id)).length;
                   return (
-                    <section className={styles.toppingGroup} key={group.id} aria-labelledby={`group-${group.id}`}>
+                    <section className={styles.toppingGroup} key={`${group}-${groupIndex}`} aria-labelledby={`group-${groupIndex}`}>
                       <div className={styles.groupHeading}>
-                        <div><h3 id={`group-${group.id}`}>{group.title}</h3><p>{group.note}</p></div>
+                        <div><h3 id={`group-${groupIndex}`}>{getLiveToppingGroupTitle(group)}</h3></div>
                         <span className={styles.groupCount}>{formatPersianNumber(selectedCount)} انتخاب</span>
                       </div>
                       <div className={styles.toppingOptions}>
@@ -254,9 +227,10 @@ export function CookieBuilder() {
                           const inputId = `topping-${option.id}`;
                           const amount = checked
                             ? nutrition.toppingAmounts[option.id] ?? 0
-                            : getToppingAmountForBase(option.id, sizeGrams, components);
+                            : getLiveToppingAmount(option.id, sizeGrams, components) ?? 0;
                           const calories = Math.round(option.recipe.calories * amount / 100);
-                          const blocked = !checked && !canAddTopping(activeToppings, option.id, sizeGrams, components);
+                          const blocked = !checked && !canAddLiveTopping(activeToppings, option.id, sizeGrams, components);
+                          const visual = getBuilderVisual(option.kind, option.id);
                           return (
                             <div className={`${styles.toppingOption} ${checked ? styles.selectedTopping : ""} ${blocked ? styles.blockedTopping : ""}`} key={option.id}>
                               <Checkbox
@@ -268,7 +242,9 @@ export function CookieBuilder() {
                                 aria-describedby={blocked ? "topping-capacity-help" : undefined}
                                 onCheckedChange={(value) => toggleTopping(option.id, value === true)}
                               />
-                              <img className={styles.toppingSwatch} src={getToppingImage(option.id)} alt="" width={32} height={32} loading="lazy" />
+                              {option.image || visual.imagePath
+                                ? <img className={styles.toppingSwatch} src={option.image || visual.imagePath!} alt="" width={32} height={32} loading="lazy" />
+                                : <span className={styles.toppingSwatch} style={{ backgroundColor: option.visualColor, borderRadius: "50%" }} aria-hidden="true" />}
                               <label htmlFor={inputId}>
                                 <strong>{option.name}</strong>
                                 <small>{option.note} · حدود {formatPersianNumber(amount)} گرم</small>
@@ -286,13 +262,13 @@ export function CookieBuilder() {
 
             <div className={styles.allergenNotice}>
               <strong>برای حساسیت غذایی</strong>
-              <span>در دستور نمونهٔ این خمیر: {allergenNames.length ? allergenNames.join("، ") : "مادهٔ حساسیت‌زای مشخصی ثبت نشده"}. آلودگی متقاطع و امکان حذف هر ماده باید با آشپزخانه بررسی شود.</span>
+              <span>در اطلاعات ERPNext: {allergenNames.length ? allergenNames.join("، ") : "مادهٔ حساسیت‌زایی ثبت نشده"}. آلودگی متقاطع باید با آشپزخانه بررسی شود.</span>
             </div>
             <p className={styles.estimateDisclaimer}>کالری و مقدار مواد تخمینی‌اند و با دستور واقعی، وزن‌کشی و پخت تغییر می‌کنند. تخم‌مرغ جزو بعضی خمیرهاست، نه تاپینگ.</p>
 
             <div className={styles.formActions}>
-              <Button className={styles.buildButton} type="button" onClick={buildAndAddCookie} disabled={!ready || !ordersEnabled || cookiePrice === null}>
-                <ShoppingBasket size={18} aria-hidden="true" /> {!ready ? "در حال آماده‌سازی سبد…" : !ordersEnabled ? "پذیرش سفارش فعلاً غیرفعال است" : cookiePrice === null ? "قیمت این ترکیب هنوز آماده نیست" : "این کوکی را بساز و به سبد ببر"}
+              <Button className={styles.buildButton} type="button" onClick={buildAndAddCookie} disabled={!ready || !connected || !selectedDough || !calculatedNutrition || !ordersEnabled || cookiePrice === null}>
+                <ShoppingBasket size={18} aria-hidden="true" /> {!ready ? "در حال آماده‌سازی سبد…" : loading ? "در حال دریافت کاتالوگ…" : !connected ? "اتصال ERPNext در دسترس نیست" : !selectedDough ? "خمیر قابل انتخابی در ERPNext منتشر نشده" : !ordersEnabled ? "پذیرش سفارش فعلاً غیرفعال است" : cookiePrice === null ? "قیمت این ترکیب هنوز آماده نیست" : "این کوکی را بساز و به سبد ببر"}
               </Button>
               <Button className={styles.resetButton} variant="ghost" type="button" onClick={resetBuilder}>از نو</Button>
             </div>
@@ -311,9 +287,12 @@ export function CookieBuilder() {
                 customDough={activeDough}
                 customToppings={activeToppings}
                 customSize={sizeGrams}
+                customDoughName={selectedDough?.name}
+                customDoughImage={selectedDough?.image}
+                customToppingNames={selectedToppings.map(({ name }) => name)}
               />
               <div className={styles.cookieName}>
-                <strong>{selectedDough.name} · بیس {formatPersianNumber(sizeGrams)} گرم</strong>
+                <strong>{selectedDough?.name ?? "یک خمیر فعال از ERPNext انتخاب کن"} · بیس {formatPersianNumber(sizeGrams)} گرم</strong>
                 <span>{selectedNames.length ? selectedNames.join(" · ") : "فقط خمیر پایه"}</span>
               </div>
               <p className={styles.previewEstimate}>مدل سه‌بعدی برای نمایش تقریبی رنگ و چیدمان مواد است.</p>
@@ -336,7 +315,7 @@ export function CookieBuilder() {
               </dl>
               <div className={styles.composition}>
                 <p className={styles.weightEquation}><strong>وزن:</strong> خمیر پایه {formatPersianNumber(nutrition.doughWeight)} + افزودنی‌ها {formatPersianNumber(nutrition.toppingWeight)} = <b>{formatPersianNumber(nutrition.weight)} گرم</b></p>
-                <p><strong>خمیر:</strong> {selectedDough.ingredients.join("، ")}</p>
+                <p><strong>خمیر:</strong> {selectedDough?.ingredients.join("، ") || "از اطلاعات کاتالوگ انتخاب نشده"}</p>
                 <p><strong>افزودنی‌ها:</strong> {selectedNames.length ? selectedNames.join("، ") : "بدون تاپینگ"}</p>
               </div>
               <p className={styles.calorieNote}>ارزش غذایی و وزن نهایی تقریبی است؛ ثبت سفارش نهایی پس از تأیید دستور انجام می‌شود.</p>

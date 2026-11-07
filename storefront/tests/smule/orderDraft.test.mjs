@@ -7,7 +7,7 @@ const customer = { name: "  آزمایش  ", phone: "09120000000", city: "تهر
 
 test("ready subtotal and product line use the catalog price, not the stored cart price", () => {
   const items = [{ kind: "product", productSlug: "cinnamon-caramel", quantity: 2, unitPrice: 1 }];
-  const verifiedProducts = SMULE_PRODUCTS.map((product) => ({ ...product, isSample: false }));
+  const verifiedProducts = SMULE_PRODUCTS.map((product) => ({ ...product, isSample: false, isAvailable: true }));
   const order = buildLocalOrderDraft({
     items,
     customer,
@@ -42,6 +42,13 @@ test("an unverified or zero-priced catalog item has no subtotal and cannot becom
   assert.equal(buildLocalOrderDraft({ items, customer, deliveryMethod: "pickup", products: unpricedProducts }), null);
 });
 
+test("a stale cart cannot proceed when the ERPNext product is out of stock", () => {
+  const items = [{ kind: "product", productSlug: "cinnamon-caramel", quantity: 1 }];
+  const outOfStockProducts = SMULE_PRODUCTS.map((product) => ({ ...product, isSample: false, isAvailable: false }));
+  assert.equal(getReadySubtotal(items, outOfStockProducts), null);
+  assert.equal(buildLocalOrderDraft({ items, customer, deliveryMethod: "pickup", products: outOfStockProducts }), null);
+});
+
 test("custom-cookie line is recalculated from its recipe and remains quote-required", () => {
   const order = buildLocalOrderDraft({
     items: [
@@ -72,7 +79,7 @@ test("custom-cookie line is recalculated from its recipe and remains quote-requi
 });
 
 test("a customer-requested pickup or delivery schedule remains attached to the order", () => {
-  const verifiedProducts = SMULE_PRODUCTS.map((product) => ({ ...product, isSample: false }));
+  const verifiedProducts = SMULE_PRODUCTS.map((product) => ({ ...product, isSample: false, isAvailable: true }));
   const order = buildLocalOrderDraft({
     items: [{ kind: "product", productSlug: "cinnamon-caramel", quantity: 1 }],
     customer,

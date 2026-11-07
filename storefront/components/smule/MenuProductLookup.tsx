@@ -1,9 +1,11 @@
 "use client";
 
+/* eslint-disable @next/next/no-html-link-for-pages -- Native anchors keep full-page storefront routes stable. */
+
 import { useSyncExternalStore } from "react";
 import { NotFoundPage } from "@/components/smule/NotFoundPage";
 import { useStorefrontData } from "@/components/smule/StorefrontDataProvider";
-import { getSmuleProduct, SMULE_PRODUCTS, type SmuleProduct } from "@/lib/smule/products";
+import { getSmuleProduct, type SmuleProduct } from "@/lib/smule/products";
 import { ProductDetail } from "@/components/smule/ProductDetail";
 import styles from "./MenuProductLookup.module.css";
 
@@ -23,13 +25,13 @@ function getProductSlug() {
 }
 
 export function MenuProductLookup() {
-  const { products, loading, connected, ordersEnabled } = useStorefrontData();
+  const { products, loading, connected, ordersEnabled, error } = useStorefrontData();
   const slug = useSyncExternalStore(subscribeToLocation, getProductSlug, () => "");
 
-  const product: SmuleProduct | undefined = getSmuleProduct(slug, products)
-    ?? (!connected ? getSmuleProduct(slug, SMULE_PRODUCTS) : undefined);
+  const product: SmuleProduct | undefined = getSmuleProduct(slug, products);
 
   if (product) return <ProductDetail product={product} ordersEnabled={ordersEnabled} />;
   if (loading || !slug) return <div className={styles.loading} role="status">در حال دریافت جزئیات از منوی اسموله…</div>;
+  if (!connected) return <div className={styles.loading} role="alert">{error || "فهرست فروشگاه در دسترس نیست."} <a href="/menu">بازگشت به منو</a></div>;
   return <NotFoundPage />;
 }

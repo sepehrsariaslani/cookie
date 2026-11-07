@@ -4,6 +4,36 @@ from frappe.model.document import Document
 
 class SmuleStoreSettings(Document):
 	def validate(self):
+		if self.sales_warehouse:
+			warehouse = frappe.db.get_value(
+				"Warehouse", self.sales_warehouse, ["company", "is_group", "disabled"], as_dict=True
+			)
+			if not warehouse or warehouse.disabled or warehouse.is_group:
+				frappe.throw("انبار فروش باید یک انبار فعال و نهایی (غیرگروهی) باشد.")
+			if not self.company or warehouse.company != self.company:
+				frappe.throw("شرکت تنظیمات فروشگاه و انبار فروش باید یکسان باشند.")
+		elif self.online_orders_enabled:
+			frappe.throw("برای فعال‌کردن فروش آنلاین، انبار فروش را انتخاب کنید.")
+
+		for fieldname, label in (
+			("production_source_warehouse", "انبار مواد اولیهٔ تولید"),
+			("production_wip_warehouse", "انبار در جریان تولید"),
+		):
+			warehouse_name = getattr(self, fieldname, None)
+			if not warehouse_name:
+				continue
+			warehouse = frappe.db.get_value(
+				"Warehouse", warehouse_name, ["company", "is_group", "disabled"], as_dict=True
+			)
+			if not warehouse or warehouse.disabled or warehouse.is_group:
+				frappe.throw(f"{label} باید یک انبار فعال و نهایی (غیرگروهی) باشد.")
+			if not self.company or warehouse.company != self.company:
+				frappe.throw(f"شرکت {label} باید با شرکت تنظیمات فروشگاه یکسان باشد.")
+		production_source = getattr(self, "production_source_warehouse", None)
+		production_wip = getattr(self, "production_wip_warehouse", None)
+		if production_source and production_source == production_wip:
+			frappe.throw("انبار مواد اولیه و انبار در جریان تولید باید متفاوت باشند.")
+
 		if not self.online_orders_enabled:
 			return
 

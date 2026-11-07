@@ -29,6 +29,7 @@
 .price { color: var(--burgundy); font-size: 1.35rem; font-weight: 800; }
 .pricePending { display: block; font-size: 1rem; line-height: 1.55; }
 .priceHint { color: var(--ink-soft); font-size: .76rem; line-height: 1.55; }
+.availabilityNote { margin: -.55rem 0 1rem; padding: .65rem .8rem; border-inline-start: 3px solid var(--gold-ink); border-radius: .65rem; background: var(--gold-wash); color: var(--burgundy); font-size: .82rem; line-height: 1.65; }
 .serving { padding: .35rem .65rem; border-radius: 999px; background: var(--gold-wash); color: var(--burgundy); font-size: .8rem; font-weight: 600; white-space: nowrap; }
 
 .nutrition { overflow: hidden; margin-bottom: 1.25rem; border-radius: 1.35rem; background: linear-gradient(145deg, var(--burgundy), var(--burgundy-deep)); color: var(--cream); box-shadow: 0 15px 34px color-mix(in srgb, var(--burgundy) 12%, transparent); }

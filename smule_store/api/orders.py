@@ -7,13 +7,15 @@ import re
 import frappe
 from frappe.utils import add_days, now_datetime, today
 
-from smule_store.api.storefront import _get_prices, _get_ready_product_prices
+from smule_store.api.storefront import _get_prices
 from smule_store.domain.cookie import calculate_custom_cookie
 from smule_store.domain.delivery import normalize_delivery_city
 from smule_store.domain.order_tracking import create_tracking_token, hash_tracking_token
 from smule_store.domain.payments import create_native_payment_request, get_live_payment_configuration
 from smule_store.domain.pricing import calculate_custom_cookie_price
 from smule_store.domain.scheduling import normalize_coordinates, normalize_requested_schedule
+from smule_store.domain.storefront_catalog import can_fulfill_quantity, get_stock_status, product_price_fields
+from smule_store.utils.item_uom import get_grams_to_stock_factor as _get_grams_to_stock_factor
 
 MAX_ORDER_LINES = 30
 MAX_ORDER_QUANTITY = 20
@@ -112,6 +114,9 @@ def _get_store_item(slug, expected_type):
 			"smule_kcal_per_100g",
 			"smule_component_group",
 			"smule_recipe_is_sample",
+			"is_stock_item",
+			"stock_uom",
+			"smule_storefront_type",
 		],
 		limit_page_length=2,
 	)
@@ -134,35 +139,34 @@ def _normalize_quantity(value):
 	return quantity
 
 
-def _read_product_line(line, settings, price_cache):
+def _read_product_line(line, settings, price_cache, stock_cache):
 	slug = line.get("productSlug") or line.get("slug")
 	item = _get_store_item(slug, "Product")
 	if not frappe.db.get_value("Item", item.name, "is_sales_item"):
 		_fail("یکی از کوکی‌های آماده برای فروش تنظیم نشده است.")
 	if item.smule_recipe_is_sample:
 		_fail("اطلاعات یکی از کوکی‌های آماده هنوز در آشپزخانه تأیید نشده است.")
-	price = price_cache.get(item.name)
-	if not price:
-		_fail("برای یکی از کوکی‌های آماده، BOM پیش‌فرضِ فعال و بهای ساخت معتبر در ERPNext پیدا نشد.")
+	price = product_price_fields(price_cache.get(item.name))
+	if not price["price"] or not price["currency"]:
+		_fail("برای یکی از کوکی‌های آماده، قیمت معتبر فروش در ERPNext ثبت نشده است.")
+	quantity = _normalize_quantity(line.get("quantity", 1))
+	stock_status = stock_cache.get(
+		item.name,
+		get_stock_status(item.is_stock_item, settings.sales_warehouse),
+	)
+	if not can_fulfill_quantity(stock_status, quantity):
+		_fail("موجودی انبار برای تعداد درخواستی یکی از کوکی‌های آماده کافی نیست.")
 	price_snapshot = {
-		"method": "ERPNext submitted default BOM cost plus configured markup",
-		"bom": price["bom_name"],
-		"bomQuantity": price["bom_quantity"],
-		"bomTotalCost": price["bom_total_cost"],
-		"unitCost": price["material_cost"],
-		"markupPercent": price["markup_percent"],
-		"markupAmount": price["markup_amount"],
-		"roundingIncrement": price["rounding_increment"],
-		"roundingAmount": price["rounding_amount"],
-		"unitPrice": price["unit_price"],
-		"currency": frappe.db.get_value("Price List", settings.selling_price_list, "currency"),
+		"method": "ERPNext native Item Price",
+		"unitPrice": price["price"],
+		"currency": price["currency"],
 	}
 	return {
 		"line_type": "کوکی آماده",
 		"item_code": item.name,
 		"title_fa": item.smule_display_name_fa or item.item_name,
-		"qty": _normalize_quantity(line.get("quantity", 1)),
-		"unit_price": price["unit_price"],
+		"qty": quantity,
+		"unit_price": price["price"],
 		"quote_required": 0,
 		"pricing_snapshot": json.dumps(price_snapshot, ensure_ascii=False, separators=(",", ":")),
 	}
@@ -177,6 +181,13 @@ def _read_custom_line(line, settings):
 	if len(selected) > 6:
 		_fail("هر کوکی حداکثر ۶ افزودنی می‌تواند داشته باشد.")
 	toppings = [_get_store_item(slug, ("Topping", "Flavor")) for slug in selected]
+	if any(not item.is_stock_item or not item.stock_uom for item in [dough, *toppings]):
+		_fail("هر خمیر و افزودنی باید در ERPNext یک کالای انبارشونده با واحد موجودی داشته باشد.")
+	try:
+		for item in [dough, *toppings]:
+			_get_grams_to_stock_factor(item)
+	except (TypeError, ValueError) as error:
+		_fail(str(error))
 	if dough.smule_recipe_is_sample or any(item.smule_recipe_is_sample for item in toppings):
 		_fail("دستور یکی از خمیرها یا افزودنی‌ها هنوز در آشپزخانه تأیید نشده است.")
 	base_weight = line.get("sizeGrams", line.get("baseWeightGrams"))
@@ -219,7 +230,25 @@ def _read_custom_line(line, settings):
 	if topping_names:
 		summary += " · " + "، ".join(topping_names)
 
+	materials = [{
+		"itemCode": dough.name,
+		"slug": dough.smule_slug,
+		"kind": "Dough",
+		"name": dough_name,
+		"grams": float(calculation["base_weight_grams"]),
+		"uom": "Gram",
+	}]
+	for item in toppings:
+		materials.append({
+			"itemCode": item.name,
+			"slug": item.smule_slug,
+			"kind": item.smule_storefront_type,
+			"name": item.smule_display_name_fa or item.item_name,
+			"grams": float(calculation["topping_amounts"][item.smule_slug]),
+			"uom": "Gram",
+		})
 	recipe = {
+		"materials": materials,
 		"dough": {"itemCode": dough.name, "slug": dough.smule_slug, "name": dough_name},
 		"toppings": [
 			{"itemCode": item.name, "slug": item.smule_slug, "name": item.smule_display_name_fa or item.item_name}
@@ -251,6 +280,31 @@ def _read_custom_line(line, settings):
 		"base_weight_grams": calculation["base_weight_grams"],
 		"final_weight_grams": calculation["final_weight_grams"],
 		"estimated_calories": calculation["estimated_calories"],
+	}
+
+
+def _get_stock_statuses(items, warehouse):
+	"""Read the selected Warehouse's live Bin balances for requested stock items."""
+	item_codes = [item.name for item in items]
+	bins = {}
+	if warehouse and item_codes:
+		bins = {
+			row.item_code: row
+			for row in frappe.get_all(
+				"Bin",
+				filters={"item_code": ["in", item_codes], "warehouse": warehouse},
+				fields=["item_code", "actual_qty", "reserved_qty"],
+				limit_page_length=len(item_codes),
+			)
+		}
+	return {
+		item.name: get_stock_status(
+			item.is_stock_item,
+			warehouse,
+			actual_qty=bins[item.name].actual_qty if item.name in bins else 0,
+			reserved_qty=bins[item.name].reserved_qty if item.name in bins else 0,
+		)
+		for item in items
 	}
 
 
@@ -355,17 +409,18 @@ def create_order_request(order=None):
 			"smule_slug": ["in", product_slugs],
 			"smule_storefront_type": "Product",
 		},
-		fields=["name"],
+		fields=["name", "is_stock_item"],
 		limit_page_length=MAX_ORDER_LINES,
 	) if product_slugs else []
-	price_cache = _get_ready_product_prices([item.name for item in product_items], settings)
+	price_cache = _get_prices([item.name for item in product_items], price_list)
+	stock_cache = _get_stock_statuses(product_items, settings.sales_warehouse)
 
 	request_items = []
 	for line in lines:
 		if not isinstance(line, dict):
 			_fail("یکی از اقلام سبد معتبر نیست.")
 		if line.get("kind") == "product" or line.get("productSlug") or line.get("slug"):
-			request_items.append(_read_product_line(line, settings, price_cache))
+			request_items.append(_read_product_line(line, settings, price_cache, stock_cache))
 		elif line.get("kind") == "custom" or line.get("doughId") or line.get("doughSlug"):
 			request_items.append(_read_custom_line(line, settings))
 		else:

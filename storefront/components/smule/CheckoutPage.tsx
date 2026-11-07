@@ -9,7 +9,8 @@ import { CommerceHeader } from "@/components/smule/CommerceHeader";
 import { useCookieCart } from "@/components/smule/CartProvider";
 import { useStorefrontData } from "@/components/smule/StorefrontDataProvider";
 import { CheckoutScheduleFields, type DeliveryCoordinates } from "@/components/smule/checkout/CheckoutScheduleFields";
-import { calculateCookiePrice, DOUGHS } from "@/lib/smule/cookie-builder";
+import { calculateCookiePrice } from "@/lib/smule/cookie-builder";
+import { calculateLiveCookieNutrition } from "@/lib/smule/live-cookie-builder";
 import { fetchCustomerAccount, type SmuleAccountAddress } from "@/lib/smule/customer-account";
 import { sendOrderRequest } from "@/lib/smule/frappe-client";
 import { getReadySubtotal } from "@/lib/smule/order-draft";
@@ -66,9 +67,22 @@ export function CheckoutPage() {
   const activeDeliveryMethod = !canPickup && canDeliver ? "delivery" : deliveryMethod;
   const deliveryMethodAvailable = activeDeliveryMethod === "pickup" ? canPickup : canDeliver;
   const readySubtotal = getReadySubtotal(items, products);
-  const customPrices = new Map(items.flatMap((item) => item.kind === "custom"
-    ? [[item.id, calculateCookiePrice(item.doughId, item.toppingIds, item.sizeGrams, components, currency, pricingMarkupPercent, customCookieFixedCost, priceRoundingIncrement)] as const]
-    : []));
+  const customDetails = new Map(items.flatMap((item) => {
+    if (item.kind !== "custom") return [];
+    const dough = components.find((component) => component.kind === "Dough" && component.slug === item.doughId && !component.isSample);
+    const toppings = item.toppingIds.map((slug) => components.find((component) =>
+      (component.kind === "Topping" || component.kind === "Flavor") && component.slug === slug && !component.isSample));
+    const materialsAvailable = Boolean(dough?.isStockItem && dough.stockUom && toppings.every((component) => component?.isStockItem && component.stockUom));
+    const nutrition = dough && toppings.every(Boolean) && materialsAvailable
+      ? calculateLiveCookieNutrition(item.doughId, item.toppingIds, item.sizeGrams, components)
+      : null;
+    const price = connected && nutrition
+      ? calculateCookiePrice(item.doughId, item.toppingIds, item.sizeGrams, components, currency, pricingMarkupPercent, customCookieFixedCost, priceRoundingIncrement)
+      : null;
+    return [[item.id, { dough, toppings, nutrition, price }] as const];
+  }));
+  const customPrices = new Map([...customDetails].map(([id, details]) => [id, details.price]));
+  const unavailableCustomCount = [...customDetails.values()].filter((details) => !details.nutrition).length;
   const deliveryFeeDisplay = activeDeliveryMethod === "delivery"
     && deliveryFeeCollection === "افزودن به مبلغ زرین‌پال"
     ? Math.round(toDisplayTomans(deliveryFee, currency))
@@ -88,7 +102,9 @@ export function CheckoutPage() {
     : !connected
       ? "اتصال فروشگاه برقرار نیست؛ اطلاعات تماس را وارد نکن. سبدت حفظ می‌شود و بعداً می‌توانی دوباره بررسی کنی."
       : !allItemsPriced
-        ? "قیمت نهایی همهٔ اقلام هنوز از ERPNext تأیید نشده است؛ فعلاً اطلاعات تماس لازم نیست."
+        ? unavailableCustomCount
+          ? "یک یا چند جزء ترکیب سفارشی دیگر در کاتالوگ فعال ERPNext نیست؛ فعلاً سفارش و اطلاعات تماس ثبت نمی‌شود."
+          : "قیمت یا موجودی همهٔ اقلام هنوز از ERPNext تأیید نشده است؛ فعلاً اطلاعات تماس لازم نیست."
         : !ordersEnabled
           ? "پذیرش سفارش آنلاین هنوز در تنظیمات اسموله فعال نشده است؛ سبدت را نگه دار و بعداً دوباره بررسی کن."
           : !deliveryMethodAvailable
@@ -374,10 +390,12 @@ export function CheckoutPage() {
                       ? <div className={styles.summaryLine} key={item.id}><span>{product.name} × {formatPersianNumber(item.quantity)}</span><strong>{formatToman(product.price * item.quantity)}</strong></div>
                       : <div className={styles.summaryLine} key={item.id}><span>{product ? `${product.name} · بدون قیمت تأییدشده` : "محصول ناموجود در منوی فعلی"}</span><strong>نامشخص</strong></div>;
                   }
-                  const dough = DOUGHS.find((option) => option.id === item.doughId) ?? DOUGHS[0];
+                  const details = customDetails.get(item.id);
+                  const doughName = details?.dough?.name ?? "خمیر ناموجود در کاتالوگ";
+                  const toppingNames = item.toppingIds.map((slug, index) => details?.toppings[index]?.name ?? `ماده ناموجود (${slug})`);
                   const unitPrice = customPrices.get(item.id);
                   const displayPrice = unitPrice === null || unitPrice === undefined ? null : Math.round(toDisplayTomans(unitPrice * item.quantity, currency));
-                  return <div className={styles.summaryLine} key={item.id}><span>{dough.name} · {formatPersianNumber(item.sizeGrams)} گرم × {formatPersianNumber(item.quantity)}</span><strong>{displayPrice === null ? "نرخ مواد ناقص" : formatToman(displayPrice)}</strong></div>;
+                  return <div className={styles.summaryLine} key={item.id}><span>{doughName} · {toppingNames.length ? toppingNames.join("، ") : "بدون افزودنی"} · {formatPersianNumber(item.sizeGrams)} گرم × {formatPersianNumber(item.quantity)}</span><strong>{displayPrice === null ? "نرخ یا ماده ناقص" : formatToman(displayPrice)}</strong></div>;
                 })}
                 {deliveryFeeDisplay > 0 && <div className={styles.summaryLine}><span>هزینهٔ ثابت اسنپ‌پیک</span><strong>{formatToman(deliveryFeeDisplay)}</strong></div>}
                 <div className={styles.total}><span>{!allItemsPriced ? "جمع نهایی" : deliveryFeeDisplay > 0 ? "جمع قابل پرداخت" : "جمع اقلام"}</span><strong>{allItemsPriced ? formatToman((readySubtotal ?? 0) + (customSubtotal ?? 0) + deliveryFeeDisplay) : "پس از تأیید قیمت‌ها"}</strong></div>

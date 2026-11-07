@@ -4,7 +4,7 @@
 
 **Goal:** Make the existing Smule storefront read explicitly published products, valid ERPNext selling prices, and warehouse-specific availability from native ERPNext records without changing its visual identity.
 
-**Architecture:** Repair Frappe's app/module map when the Smule package is imported. The catalog API will use `Item`, `Item Price`, `Warehouse`, and `Bin`; `Smule Store Settings` will hold only a Link to the chosen native sales Warehouse. The existing storefront UI remains, but live catalog failures and empty catalogs no longer fall back to sample products.
+**Architecture:** Repair Frappe's app/module map from a `before_request` hook after site initialization; importing the package itself stays side-effect-free for Bench command discovery. The catalog API will use `Item`, `Item Price`, `Warehouse`, and `Bin`; `Smule Store Settings` will hold only a Link to the chosen native sales Warehouse. The existing storefront UI remains, but live catalog failures and empty catalogs no longer fall back to sample products.
 
 **Tech Stack:** Frappe 16 / ERPNext 16, Python, Next.js-compatible React + TypeScript, Node.js test runner (`tsx`).
 
@@ -16,6 +16,7 @@
 - Do not map old sample product names to ERPNext records by name similarity.
 - Add `sales_warehouse` as a Link to native `Warehouse`; leave it blank unless the owner selects a company-owned leaf Warehouse.
 - An Item is not orderable if it is stock-managed and the sales Warehouse is unset or available stock is zero.
+- Revalidate each requested Item, current `Item Price`, and requested quantity against the configured Warehouse on the server; browser catalog/cart state is never authoritative.
 - Keep online orders, payments, delivery, and the cookie builder's sample recipe flow disabled/unmodified in this subproject.
 - Do not put sample products or sample prices into live product listings when the API is empty or unavailable.
 - Do not alter `/desk`, existing Item data, price records, or operational ERPNext configuration as part of code deployment.
@@ -28,61 +29,86 @@
 - Create: `smule_store/utils/__init__.py`
 - Create: `smule_store/utils/bootstrap.py`
 - Modify: `smule_store/__init__.py`
+- Modify: `smule_store/hooks.py`
 - Test: `smule_store/tests/test_storefront_bootstrap.py`
 
 **Interfaces:**
-- Produces: `ensure_smule_module_map() -> None`; it guarantees `frappe.local.module_app["smule_store"] == "smule_store"` and `frappe.local.app_modules["smule_store"]` includes the scrubbed module names from `modules.txt`.
+- Produces: `ensure_smule_module_map() -> None`, registered as a `before_request` hook; after Frappe initializes a site, it guarantees `frappe.local.module_app["smule_store"] == "smule_store"` and `frappe.local.app_modules["smule_store"]` includes the scrubbed module names from `modules.txt`.
 
 - [ ] **Step 1: Write the failing regression test**
 
-Create a test that saves the current local maps, empties them, reloads the app package, and asserts that the module map is repaired. Restore the old maps in `finally` so the test does not affect later tests.
+Create isolated subprocess tests: one imports the package with `frappe.local.site` and `frappe.client_cache` unset and proves no site-dependent helper runs; another registers and invokes the `before_request` helper after site initialization, proving stale maps and an empty module list still produce the required Smule app mapping. The subprocess ensures these tests do not depend on or mutate a live Bench/Frappe site.
 
 ```python
-import importlib
+import subprocess
+import sys
 import unittest
-
-import frappe
-import smule_store
+from pathlib import Path
 
 
 class TestStorefrontBootstrap(unittest.TestCase):
 	def test_import_repairs_missing_smule_module_mapping(self):
-		previous_module_app = getattr(frappe.local, "module_app", None)
-		previous_app_modules = getattr(frappe.local, "app_modules", None)
-		try:
-			frappe.local.module_app = {}
-			frappe.local.app_modules = {}
-			importlib.reload(smule_store)
-			self.assertEqual(frappe.local.module_app.get("smule_store"), "smule_store")
-			self.assertIn("smule_store", frappe.local.app_modules.get("smule_store", []))
-		finally:
-			frappe.local.module_app = previous_module_app
-			frappe.local.app_modules = previous_app_modules
+		repo_root = Path(__file__).resolve().parents[2]
+		probe = r'''
+import importlib
+import sys
+import types
+from types import SimpleNamespace
+
+sys.path.insert(0, sys.argv[1])
+frappe = types.ModuleType("frappe")
+frappe.local = SimpleNamespace(module_app={}, app_modules={})
+def setup_module_map(include_all_apps=False):
+    frappe.local.module_app = {}
+    frappe.local.app_modules = {"smule_store": []}
+
+frappe.setup_module_map = setup_module_map
+frappe.get_module_list = lambda app_name: ["Smule Store"]
+frappe.scrub = lambda value: value.lower().replace(" ", "_")
+sys.modules["frappe"] = frappe
+import smule_store
+assert frappe.local.module_app.get("smule_store") == "smule_store"
+assert "smule_store" in frappe.local.app_modules.get("smule_store", [])
+
+frappe.get_module_list = lambda app_name: []
+frappe.local.module_app = {}
+frappe.local.app_modules = {}
+importlib.reload(smule_store)
+assert frappe.local.module_app.get("smule_store") == "smule_store"
+assert frappe.local.app_modules.get("smule_store") == []
+'''
+		result = subprocess.run(
+			[sys.executable, "-c", probe, str(repo_root)],
+			capture_output=True,
+			text=True,
+			check=False,
+		)
+		self.assertEqual(result.returncode, 0, result.stderr)
 ```
 
-- [ ] **Step 2: Run the test and verify the assertion fails**
+- [ ] **Step 2: Run both tests and verify they fail for the current import side effect and missing hook**
 
-Run: `bench --site boller.ir run-tests --module smule_store.tests.test_storefront_bootstrap`
+Run: `python3 -m unittest smule_store.tests.test_storefront_bootstrap`
 
-Expected: the test reaches the assertions and fails because the current app import does not repopulate either map.
+Expected: both tests fail: package import calls `setup_module_map` before site initialization, and the hook is not yet registered. Neither test connects to a Bench site.
 
 - [ ] **Step 3: Add the module-map repair helper**
 
 Implement the same narrowly scoped fallback pattern used by the installed Flow app: call `frappe.setup_module_map(include_all_apps=False)`, then fill the Smule entries from `frappe.get_module_list("smule_store")` if the cached site map is still incomplete. Keep this module limited to map repair; do not clear all Redis/site caches from a normal web request.
 
-- [ ] **Step 4: Invoke the helper from the package import and rerun the test**
+- [ ] **Step 4: Register the helper as a site-initialized request hook and rerun the tests**
 
-In `smule_store/__init__.py`, keep the app version and use a guarded `import frappe` so importing package metadata outside a Frappe process remains safe. When Frappe is available, import and call `ensure_smule_module_map()`.
+Keep `smule_store/__init__.py` limited to package metadata. Register `smule_store.utils.bootstrap.ensure_smule_module_map` in `hooks.py` under `before_request`; Frappe runs this hook after site initialization and connection, before resolving the requested endpoint.
 
-Run: `bench --site boller.ir run-tests --module smule_store.tests.test_storefront_bootstrap`
+Run: `python3 -m unittest smule_store.tests.test_storefront_bootstrap`
 
 Expected: PASS; `frappe.local.module_app["smule_store"]` is `"smule_store"` and the module list includes `"smule_store"`.
 
 - [ ] **Step 5: Commit the isolated task**
 
-Run: `git add smule_store/__init__.py smule_store/utils/__init__.py smule_store/utils/bootstrap.py smule_store/tests/test_storefront_bootstrap.py && git commit -m "fix: repair Smule Frappe module mapping"`
+Run: `git add smule_store/__init__.py smule_store/hooks.py smule_store/utils/__init__.py smule_store/utils/bootstrap.py smule_store/tests/test_storefront_bootstrap.py && git commit -m "fix: repair Smule Frappe module mapping"`
 
-Expected: one commit containing only the four Task 1 files.
+Expected: one commit containing only the five Task 1 source/test files.
 
 ---
 
@@ -92,6 +118,7 @@ Expected: one commit containing only the four Task 1 files.
 - Create: `smule_store/domain/storefront_catalog.py`
 - Create: `smule_store/tests/test_storefront_catalog.py`
 - Modify: `smule_store/api/storefront.py`
+- Modify: `smule_store/api/orders.py`
 - Modify: `smule_store/smule_store/doctype/smule_store_settings/smule_store_settings.json`
 - Modify: `smule_store/smule_store/doctype/smule_store_settings/smule_store_settings.py`
 
@@ -99,11 +126,12 @@ Expected: one commit containing only the four Task 1 files.
 - Consumes: explicitly enabled ERPNext Items and `Smule Store Settings`.
 - Produces: catalog product records with `itemCode`, `price`, `currency`, `isAvailable`, `availableQty`, and `availabilityReason`.
 - Produces: `get_stock_status(is_stock_item, warehouse, actual_qty=0, reserved_qty=0) -> dict` with `available`, `availableQty`, and `availabilityReason`.
+- Produces: `can_fulfill_quantity(stock_status, requested_qty) -> bool`, which allows non-stock Items and otherwise requires a configured Warehouse and enough unreserved stock.
 - Produces: `product_price_fields(price_row) -> dict` with `price` copied from native `Item Price.price_list_rate` and `currency` copied from the row, or `{"price": None, "currency": None}` when no valid row exists.
 
 - [ ] **Step 1: Write failing tests for stock availability**
 
-Create the new `storefront_catalog.py` as a module-docstring-only scaffold, then add `unittest.TestCase` tests for (a) stock-managed item with no Warehouse, (b) no available stock after reservations, (c) positive stock after reservations, (d) non-stock sales item, and (e) an `Item Price` row's rate/currency being passed through unchanged. Resolve the not-yet-added functions with `getattr`; assert each is callable before calling it so RED is an assertion failure, not an import/attribute error.
+Create the new `storefront_catalog.py` as a module-docstring-only scaffold, then add `unittest.TestCase` tests for (a) stock-managed item with no Warehouse, (b) no available stock after reservations, (c) positive stock after reservations, (d) non-stock sales item, (e) an `Item Price` row's rate/currency being passed through unchanged, and (f) requested quantity not exceeding unreserved stock. Resolve the not-yet-added functions with `getattr`; assert each is callable before calling it so RED is an assertion failure, not an import/attribute error.
 
 ```python
 import unittest
@@ -150,21 +178,30 @@ class TestStorefrontStockStatus(unittest.TestCase):
 			product_price_fields(SimpleNamespace(price_list_rate=2_500_000, currency="IRR")),
 			{"price": 2_500_000, "currency": "IRR"},
 		)
+
+	def test_order_quantity_cannot_exceed_unreserved_stock(self):
+		can_fulfill_quantity = getattr(storefront_catalog, "can_fulfill_quantity", None)
+		self.assertTrue(callable(can_fulfill_quantity), "can_fulfill_quantity must be implemented")
+		if can_fulfill_quantity is None:
+			return
+		status = {"available": True, "availableQty": 3, "availabilityReason": "in_stock"}
+		self.assertTrue(can_fulfill_quantity(status, 3))
+		self.assertFalse(can_fulfill_quantity(status, 4))
 ```
 
 - [ ] **Step 2: Run the stock tests and verify they fail for the missing helper**
 
-Run: `bench --site boller.ir run-tests --module smule_store.tests.test_storefront_catalog`
+Run: `python3 -m unittest smule_store.tests.test_storefront_catalog`
 
 Expected: FAIL because `get_stock_status` is not implemented yet.
 
 - [ ] **Step 3: Implement the pure stock-status and price-field helpers**
 
-Add the typed helpers to `smule_store/domain/storefront_catalog.py`. For stock-managed Items, no selected Warehouse returns `warehouse_not_configured`; otherwise calculate `max(actual_qty - reserved_qty, 0)` and return `in_stock` only when the result is positive. Non-stock Items return available with a `None` quantity. `product_price_fields` copies only `price_list_rate` and `currency` from a row selected by the existing valid-`Item Price` query; it must not calculate or substitute BOM cost.
+Add the typed helpers to `smule_store/domain/storefront_catalog.py`. For stock-managed Items, no selected Warehouse returns `warehouse_not_configured`; otherwise calculate `max(actual_qty - reserved_qty, 0)` and return `in_stock` only when the result is positive. Non-stock Items return available with a `None` quantity. `can_fulfill_quantity` must also ensure requested quantity is a positive finite number and does not exceed available quantity. `product_price_fields` copies only `price_list_rate` and `currency` from a row selected by the existing valid-`Item Price` query; it must not calculate or substitute BOM cost.
 
 - [ ] **Step 4: Add the optional native Warehouse link to settings**
 
-Add `sales_warehouse` to `field_order` and `fields` in `smule_store_settings.json` as a Link to `Warehouse`, displayed even while online orders are off so the owner can configure it safely. In `SmuleStoreSettings.validate`, if a Warehouse is selected require it to exist, be a leaf (`is_group == 0`), and belong to the selected Company; if online orders are enabled, require a Warehouse. Do not create or select a Warehouse automatically.
+Add `sales_warehouse` to `field_order` and `fields` in `smule_store_settings.json` as a Link to `Warehouse`, displayed even while online orders are off so the owner can configure it safely. Keep the Company selector visible while orders are off so the owner can choose a matching Warehouse. In `SmuleStoreSettings.validate`, if a Warehouse is selected require it to exist, be a leaf (`is_group == 0`), and belong to the selected Company; if online orders are enabled, require a Warehouse. Do not create or select a Warehouse automatically.
 
 - [ ] **Step 5: Test the catalog uses Item Price rather than BOM cost for finished products**
 
@@ -174,15 +211,17 @@ Use the `product_price_fields` test from Step 1 to prove the exact native rate a
 
 In `api/storefront.py`, retain explicit-publication filtering, additionally require `is_sales_item == 1` for products, read `is_stock_item`, `item_group`, and `description`, and reuse `_get_prices` for finished products. Query `Bin` only for `settings.sales_warehouse`; pass `actual_qty` and `reserved_qty` through `get_stock_status`. Return product availability fields and the native `itemCode`. If the Warehouse is unset/invalid or the Item has no valid Item Price, return an honest unavailable/unpriced state rather than a sample value.
 
+In `api/orders.py`, make `_read_product_line` use the same current selling `Item Price` row and currency as the catalog rather than a BOM-derived finished-product price. Before creating a request/order, validate each requested quantity against `Bin.actual_qty - Bin.reserved_qty` for the configured Warehouse through `can_fulfill_quantity`; reject stale carts, missing Warehouses, missing prices, disabled Items, or insufficient stock server-side. Keep online orders disabled until the owner configures the site.
+
 - [ ] **Step 7: Rerun backend tests and commit Task 2**
 
-Run: `bench --site boller.ir run-tests --module smule_store.tests.test_storefront_catalog`
+Run: `python3 -m unittest smule_store.tests.test_storefront_catalog`
 
 Expected: PASS for all stock-status and catalog-price assertions. Confirm the test does not alter any ERPNext Item, Item Price, Warehouse, or Bin record.
 
-Run: `git add smule_store/domain/storefront_catalog.py smule_store/tests/test_storefront_catalog.py smule_store/api/storefront.py smule_store/smule_store/doctype/smule_store_settings/smule_store_settings.json smule_store/smule_store/doctype/smule_store_settings/smule_store_settings.py && git commit -m "feat: read Smule catalog price and stock from ERPNext"`
+Run: `git add smule_store/domain/storefront_catalog.py smule_store/tests/test_storefront_catalog.py smule_store/api/storefront.py smule_store/api/orders.py smule_store/smule_store/doctype/smule_store_settings/smule_store_settings.json smule_store/smule_store/doctype/smule_store_settings/smule_store_settings.py && git commit -m "feat: read Smule catalog price and stock from ERPNext"`
 
-Expected: one commit containing only the five Task 2 files.
+Expected: one commit containing only the six Task 2 source/test files.
 
 ---
 
@@ -321,7 +360,7 @@ Run: `python3 -m compileall -q smule_store`
 
 Expected: exit code 0 and no syntax errors.
 
-Run: `bench --site boller.ir run-tests --module smule_store.tests.test_storefront_bootstrap` and `bench --site boller.ir run-tests --module smule_store.tests.test_storefront_catalog`
+Run: `python3 -m unittest smule_store.tests.test_storefront_bootstrap` and `python3 -m unittest smule_store.tests.test_storefront_catalog`
 
 Expected: both focused test modules pass.
 
@@ -331,9 +370,9 @@ Run from `storefront/`: `npm run lint`, `npm test`, and `npm run build`.
 
 Expected: all checks pass without changing route behavior or the `/desk` mount.
 
-- [ ] **Step 3: Verify backend/API contract before live publication**
+- [ ] **Step 3: Verify backend/API contract without changing live product records**
 
-On a non-production test site, call `smule_store.api.storefront.get_catalog` with (a) no enabled Items, (b) an explicitly enabled Item with Item Price but no Warehouse, and (c) a selected Warehouse with zero stock. Expect respectively an empty product list, an unpriced/stock-unavailable honest product record, and `out_of_stock`; online orders/payments/delivery remain false in all three cases.
+Run the pure stock and price contract tests for the unavailable-warehouse, zero-stock, reserved-stock, non-stock, and Item Price cases. Before enabling publication on the live site, make one read-only API request and verify HTTP 200, an empty product list (no Items have been enabled yet), and `ordersEnabled == false`, `paymentsEnabled == false`, and `deliveryEnabled == false`. Do not seed test Items or change live flags to exercise other branches.
 
 - [ ] **Step 4: Stop before changing live ERPNext records**
 
@@ -343,6 +382,6 @@ Do not enable any Item, set a Warehouse, change quantities, publish sample image
 
 ## Self-Review
 
-- **Spec coverage:** Module-map failure is Task 1; Item Price and Bin source-of-truth plus the optional Warehouse Link are Task 2; empty/error states, no sample fallback, preserved UI, and disabled orderability are Task 3; build and acceptance gates are Task 4. BOM/builder, customer, Sales Order, payment, delivery, and content remain separate subprojects as required by the integration design.
+- **Spec coverage:** Module-map failure is Task 1; Item Price and Bin source-of-truth, server-side order quantity validation, and the optional Warehouse Link are Task 2; empty/error states, no sample fallback, preserved UI, and disabled orderability are Task 3; build and acceptance gates are Task 4. BOM/builder, customer, Work Order conversion, payment, delivery, and content remain later subprojects as required by the full integration design.
 - **Placeholder scan:** No `TODO`, `TBD`, or unassigned implementation step remains; all catalog mapping, stock rules, files, and commands are specified.
 - **Type consistency:** API keys `itemCode`, `isAvailable`, `availableQty`, and `availabilityReason` map to the corresponding optional `SmuleProduct` properties; `get_stock_status` uses the same keys and reason strings asserted by its tests.

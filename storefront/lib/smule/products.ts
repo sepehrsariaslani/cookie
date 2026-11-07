@@ -9,6 +9,7 @@ export type NutritionFacts = {
 };
 
 export type SmuleProduct = {
+  itemCode?: string;
   /** Extendable storefront category; future desserts use the same menu grouping. */
   category: string;
   slug: string;
@@ -29,6 +30,9 @@ export type SmuleProduct = {
   allergens: string[];
   /** True when the value came from an unverified starter recipe. */
   isSample?: boolean;
+  isAvailable?: boolean;
+  availableQty?: number | null;
+  availabilityReason?: string;
 };
 
 /** Sample prices and nutrition figures; replace them with verified values before opening sales. */
@@ -120,9 +124,33 @@ export function isProductOrderable(product: SmuleProduct | undefined, ordersEnab
     ordersEnabled
       && product
       && !product.isSample
+      && product.isAvailable === true
       && Number.isFinite(product.price)
       && product.price > 0,
   );
+}
+
+export function getProductAvailabilityMessage(product: SmuleProduct) {
+  if (product.isSample) return "اطلاعات این محصول هنوز در ERPNext تأیید نشده است.";
+  if (!Number.isFinite(product.price) || product.price <= 0) return "قیمت فروش این محصول در ERPNext ثبت نشده است.";
+  if (product.availabilityReason === "warehouse_not_configured") return "انبار فروش هنوز در تنظیمات ERPNext انتخاب نشده است.";
+  if (product.availabilityReason === "out_of_stock") return "این محصول در انبار فروش موجود نیست.";
+  if (product.isAvailable !== true) return "موجودی قابل فروش این محصول در ERPNext تأیید نشده است.";
+  return "";
+}
+
+export function getProductOrderBlockMessage(product: SmuleProduct, ordersEnabled: boolean) {
+  return getProductAvailabilityMessage(product)
+    || (!ordersEnabled ? "پذیرش سفارش اینترنتی فعلاً فعال نیست." : "");
+}
+
+export function getProductOrderBlockLabel(product: SmuleProduct) {
+  if (product.isSample) return "نمونهٔ غیرفعال";
+  if (!Number.isFinite(product.price) || product.price <= 0) return "قیمت ثبت نشده";
+  if (product.availabilityReason === "warehouse_not_configured") return "انبار تنظیم نشده";
+  if (product.availabilityReason === "out_of_stock") return "ناموجود";
+  if (product.isAvailable !== true) return "موجودی نامشخص";
+  return "سفارش غیرفعال";
 }
 
 export function formatPersianNumber(value: number) {

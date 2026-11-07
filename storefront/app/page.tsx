@@ -17,7 +17,7 @@ import { useCookieCart } from "@/components/smule/CartProvider";
 import { useStorefrontData } from "@/components/smule/StorefrontDataProvider";
 import { CookieCanvas, CookieStorySection } from "@/components/smule/CookieStory";
 import { CommerceFooter } from "@/components/smule/CommerceFooter";
-import { formatPersianNumber, formatProductPrice, type SmuleProduct } from "@/lib/smule/products";
+import { formatPersianNumber, formatProductPrice, getProductAvailabilityMessage, isProductOrderable, type SmuleProduct } from "@/lib/smule/products";
 
 const ingredients = [
   { label: "کره‌ی خالص", note: "نرم و طلایی", className: "ingredient-butter", tx: "190px", ty: "210px" },
@@ -57,8 +57,9 @@ function IngredientChip({ item }: { item: (typeof ingredients)[number] }) {
   );
 }
 
-function ProductCard({ product }: { product: SmuleProduct }) {
-  return (
+function ProductCard({ product, ordersEnabled }: { product: SmuleProduct; ordersEnabled: boolean }) {
+	const canOrder = isProductOrderable(product, ordersEnabled);
+	return (
     <article className={`product-card ${product.className}`}>
       <div className="product-card-topline">
         <span>{product.number}</span>
@@ -72,12 +73,13 @@ function ProductCard({ product }: { product: SmuleProduct }) {
         <div>
           <h3>{product.name}</h3>
           <p>{product.description}</p>
+		  {getProductAvailabilityMessage(product) && <small className="product-availability" role="status">{getProductAvailabilityMessage(product)}</small>}
         </div>
         <div className="product-bottom">
           <strong>{formatProductPrice(product)}</strong>
           <div className="product-actions">
             <a className="product-detail-link" href={`/menu/product?slug=${encodeURIComponent(product.slug)}`}>جزئیات</a>
-            {!product.isSample && <a className="text-link" href={`/menu/product?slug=${encodeURIComponent(product.slug)}`}>سفارش <ArrowLeft size={17} aria-hidden="true" /></a>}
+            {canOrder && <a className="text-link" href={`/menu/product?slug=${encodeURIComponent(product.slug)}`}>سفارش <ArrowLeft size={17} aria-hidden="true" /></a>}
           </div>
         </div>
       </div>
@@ -87,7 +89,7 @@ function ProductCard({ product }: { product: SmuleProduct }) {
 
 export default function Home() {
   const { itemCount, ready } = useCookieCart();
-  const { products, connected, loading } = useStorefrontData();
+  const { products, connected, loading, error, ordersEnabled } = useStorefrontData();
   const [replayKey, setReplayKey] = useState(0);
   const [assembled, setAssembled] = useState(false);
 
@@ -169,7 +171,7 @@ export default function Home() {
               </div>
               <div className="hero-note">
                 <span className="note-check"><Check size={14} aria-hidden="true" /></span>
-                <span>ترکیبات، قیمت‌ها و ارزش غذایی تا زمان تأیید فروشگاه نمونه‌اند.</span>
+                <span>{loading ? "در حال دریافت قیمت و موجودی از ERPNext…" : connected ? "اطلاعات کالا و قیمت از ERPNext است؛ سفارش فقط با قیمت و موجودی تأییدشده فعال می‌شود." : error || "اتصال فهرست فروشگاه به ERPNext برقرار نشد."}</span>
               </div>
             </div>
           </div>
@@ -198,10 +200,10 @@ export default function Home() {
               <h2>کدام طعم،<br /><em>امروزت را بهتر می‌کند؟</em></h2>
             </div>
             <p>هر کوکی با همان ترکیب ساده‌ای شروع می‌شود که دوستش داریم: مواد خوب، زمان کافی و یک فرِ داغ.</p>
-            <small className="product-data-note">قیمت و ارزش غذاییِ منو در این نسخه نمونه است.</small>
+            <small className="product-data-note">{connected ? "قیمت و موجودی از ERPNext خوانده می‌شود؛ اطلاعات تغذیه‌ای فقط در صورت ثبت کالا نمایش داده می‌شود." : loading ? "در حال اتصال به کاتالوگ ERPNext…" : error || "فهرست محصولات ERPNext در دسترس نیست."}</small>
           </div>
           <div className="product-grid">
-            {products.length ? products.map((product) => <ProductCard key={product.slug} product={product} />) : (
+            {products.length ? products.map((product) => <ProductCard key={product.slug} product={product} ordersEnabled={ordersEnabled} />) : (
               <div className="catalog-empty" role="status">
                 <strong>{loading ? "منوی اسموله را می‌آوریم…" : connected ? "هنوز طعمی برای نمایش فعال نشده" : "فهرست فروشگاه در دسترس نیست"}</strong>
                 <span>{connected ? "پس از ثبت کالا و قیمت تأییدشده در ERPNext، طعم‌ها همین‌جا نمایش داده می‌شوند." : "اتصال فروشگاه را بررسی کن؛ فعلاً جزئیات سفارش در دسترس نیست."}</span>
@@ -232,7 +234,7 @@ export default function Home() {
             </article>
             <article className="process-item">
               <span className="process-number">۰۳</span>
-              <div><h3>سبد را مرور کن</h3><p>اقلام و روش دریافت را بررسی کن؛ سفارش واقعی پس از اتصال فروشگاه فعال می‌شود.</p></div>
+              <div><h3>سبد را مرور کن</h3><p>اقلام را مرور کن؛ ثبت سفارش پس از تأیید موجودی و فعال‌شدن تنظیمات فروش در ERPNext انجام می‌شود.</p></div>
               <Check size={24} aria-hidden="true" />
             </article>
           </div>

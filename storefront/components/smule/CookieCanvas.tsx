@@ -7,6 +7,7 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { createIngredientFlight, positionStoryCamera, smooth } from "./cookieMotion";
 import { DOUGHS, TOPPINGS, type DoughId, type ToppingId } from "@/lib/smule/cookie-builder";
 import { smuleAsset } from "@/lib/smule/assets";
+import { getBuilderVisual } from "@/lib/smule/live-cookie-builder";
 import { createCookieBuilderScene, type CustomAppearance } from "./three/cookieBuilderScene";
 import { disposeModel } from "./three/disposeModel";
 
@@ -17,15 +18,20 @@ type CookieCanvasProps = {
   customDough?: DoughId;
   customToppings?: ToppingId[];
   customSize?: number;
+  customDoughName?: string;
+  customDoughImage?: string;
+  customToppingNames?: string[];
 };
 
 /** Blender authors the geometry and PBR maps; this only lights and presents it. */
-export function CookieCanvas({ variant, progressRef, className = "", customDough = "marble", customToppings = [], customSize = 50 }: CookieCanvasProps) {
+export function CookieCanvas({ variant, progressRef, className = "", customDough = "", customToppings = [], customSize = 50, customDoughName, customDoughImage, customToppingNames = [] }: CookieCanvasProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const customToppingsKey = customToppings.join("|");
+  const builderVisual = getBuilderVisual("Dough", customDough);
+  const builderAssetsSupported = Boolean(builderVisual.modelId && customToppings.every((slug) => getBuilderVisual("Topping", slug).modelId));
   const customAppearanceRef = useRef<CustomAppearance | null>(null);
   const applyCustomRef = useRef<((appearance: CustomAppearance | null) => void) | null>(null);
 
@@ -40,6 +46,7 @@ export function CookieCanvas({ variant, progressRef, className = "", customDough
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
+    if (variant === "builder" && !builderAssetsSupported) return;
     let renderer: THREE.WebGLRenderer | undefined;
     let scene: THREE.Scene | undefined;
     let environment: THREE.WebGLRenderTarget | undefined;
@@ -239,16 +246,23 @@ export function CookieCanvas({ variant, progressRef, className = "", customDough
       renderer?.dispose();
       renderer?.domElement.remove();
     };
-  }, [variant, progressRef]);
+  }, [variant, progressRef, builderAssetsSupported]);
 
   const fallbackImage = variant === "builder"
-    ? smuleAsset(`/images/builder-dough/${customDough}.png`)
+    ? customDoughImage || builderVisual.imagePath || ""
     : smuleAsset(`/images/smule-cookie-${variant}.png`);
-  const selectedNames = TOPPINGS.filter((option) => customToppings.includes(option.id)).map((option) => option.name);
-  const doughName = DOUGHS.find((option) => option.id === customDough)?.name ?? "کوکی";
+  const selectedNames = variant === "builder"
+    ? customToppingNames
+    : TOPPINGS.filter((option) => customToppings.includes(option.id)).map((option) => option.name);
+  const doughName = variant === "builder" ? customDoughName ?? "کوکی سفارشی" : DOUGHS.find((option) => option.id === customDough)?.name ?? "کوکی";
+  if (variant === "builder" && !builderAssetsSupported) {
+    return <div className={`cookie-canvas ${className}`} role="img" aria-label={`پیش‌نمایش خنثی کوکی سفارشی${customDoughName ? ` با خمیر ${customDoughName}` : ""}${selectedNames.length ? ` و افزودنی‌های ${selectedNames.join("، ")}` : ""}`}>
+      <span className="cookie-neutral-preview" aria-hidden="true"><span /></span>
+    </div>;
+  }
   return (
     <div className={`cookie-canvas ${updating ? "is-updating" : ""} ${loadFailed ? "has-load-error" : ""} ${className}`} ref={mountRef} role="img" aria-busy={updating} aria-label={variant === "builder" ? `پیش‌نمایش تقریبی سه‌بعدی ${doughName} ${customSize} گرمی${selectedNames.length ? ` با ${selectedNames.join("، ")}` : " بدون تاپینگ"}` : variant === "chocolate" ? "کوکی دست‌ساز با خمیر کاملاً شکلاتی" : "ساخت کوکی ماربل وانیل و کاکائو با تکه‌های شکلات و گردو، همراه اسکرول"}>
-      <img className={`canvas-fallback ${loaded ? "is-hidden" : ""}`} src={fallbackImage} alt="" />
+      {fallbackImage && <img className={`canvas-fallback ${loaded ? "is-hidden" : ""}`} src={fallbackImage} alt="" />}
       {variant === "builder" && (updating || loadFailed) && <span className="cookie-preview-message">{loadFailed ? "پیش‌نمایش سه‌بعدی بارگذاری نشد" : "در حال آماده‌سازی کوکی…"}</span>}
     </div>
   );

@@ -1,5 +1,5 @@
 import type { SmuleProduct } from "@/lib/smule/products";
-import { formatProductPrice } from "@/lib/smule/products";
+import { formatProductPrice, getProductAvailabilityMessage } from "@/lib/smule/products";
 import styles from "./ProductDetail.module.css";
 
 export function ProductHero({ product }: { product: SmuleProduct }) {
@@ -17,6 +17,7 @@ export function ProductHero({ product }: { product: SmuleProduct }) {
         </div>
         <span className={styles.serving}>{product.serving}</span>
       </div>
+      {getProductAvailabilityMessage(product) && <p className={styles.availabilityNote} role="status">{getProductAvailabilityMessage(product)}</p>}
     </>
   );
 }

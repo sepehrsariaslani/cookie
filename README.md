@@ -8,11 +8,15 @@ You can install this app using the [bench](https://github.com/frappe/bench) CLI:
 
 ```bash
 cd $PATH_TO_YOUR_BENCH
-bench get-app $URL_OF_THIS_REPO --branch version-16
+bench get-app $URL_OF_THIS_REPO --branch main
 bench install-app smule_store
 ```
 
 The app keeps ERPNext's native `Item`, `Item Price`, `Customer`, and `Sales Order` records authoritative. Its optional `seed_sample_catalog` command creates editable dough, topping, and product Items marked as unverified samples; it does not create prices or enable customer orders.
+
+### Self-hosted Docker installation
+
+For an existing Docker bench, make sure `smule_store` is included in the bench app list and its Python path before installation. Then run `bench --site <site> install-app smule_store`, `bench build --app smule_store`, `bench --site <site> migrate`, and clear the site's cache. This app declares compatibility with Frappe 16 in `pyproject.toml`.
 
 ### Smule site setup
 

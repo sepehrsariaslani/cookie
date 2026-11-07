@@ -1,0 +1,1 @@
+var e=new Set([`https://payment.zarinpal.com`,`https://sandbox.zarinpal.com`]);function t(t){if(!t)return null;try{let n=new URL(t);return!e.has(n.origin)||n.username||n.password||!/^\/pg\/StartPay\/[A-Za-z0-9_-]{8,64}$/.test(n.pathname)?null:n}catch{return null}}export{t};

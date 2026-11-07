@@ -1,15 +1,9 @@
 import type { NutritionFacts } from "./products";
 import { smuleAsset } from "./assets";
 
-export type DoughId = "vanilla" | "cocoa" | "marble" | "oat" | "banana-oat" | "date-cinnamon" | "almond" | "whole-wheat" | "sugar";
-export type ToppingGroupId = "fruit" | "chocolate" | "nuts" | "creams" | "flavor" | "crunch";
-export type ToppingId =
-  | "banana" | "raisin" | "date" | "cranberry"
-  | "dark-chocolate" | "milk-chocolate" | "white-chocolate"
-  | "walnut" | "pistachio" | "almond" | "hazelnut"
-  | "peanut-butter" | "pistachio-cream" | "caramel"
-  | "cinnamon" | "sea-salt" | "vanilla" | "orange-zest"
-  | "oat-flakes" | "sesame";
+export type DoughId = string;
+export type ToppingGroupId = string;
+export type ToppingId = string;
 
 export type IngredientVisualGroup = "chocolate" | "nut" | "crumb" | "salt";
 
@@ -171,7 +165,7 @@ export type CookieNutrition = NutritionFacts & {
   weight: number;
   doughWeight: number;
   toppingWeight: number;
-  toppingAmounts: Partial<Record<ToppingId, number>>;
+  toppingAmounts: Partial<Record<string, number>>;
 };
 
 export type CookiePriceComponent = {
@@ -193,13 +187,14 @@ export function getToppingAmountForBase(
   baseWeight: number,
   components?: CookiePriceComponent[],
 ) {
-  const option = TOPPINGS.find((item) => item.id === toppingId);
-  if (!option) return 0;
   const liveComponent = findCookieComponent(components, "Topping", toppingId)
     ?? findCookieComponent(components, "Flavor", toppingId);
+  if (!liveComponent && components !== undefined) return 0;
+  const option = TOPPINGS.find((item) => item.id === toppingId);
+  if (!liveComponent && !option) return 0;
   const gramsPer50 = liveComponent
     ? Math.max(0, Number.isFinite(liveComponent.gramsPer50) ? liveComponent.gramsPer50 : 0)
-    : option.gramsPer50;
+    : option!.gramsPer50;
   return Number((gramsPer50 * baseWeight / 50).toFixed(1));
 }
 
@@ -260,7 +255,7 @@ export function calculateCookieNutrition(
   const size = Math.min(MAX_COOKIE_GRAMS, Math.max(MIN_COOKIE_GRAMS, requestedSize));
   const selected = TOPPINGS.filter((option) => toppingIds.includes(option.id));
   const toppingAmounts = Object.fromEntries(selected.map((option) => [option.id, getToppingAmountForBase(option.id, size, components)])) as Partial<Record<ToppingId, number>>;
-  const toppingWeight = Number(Object.values(toppingAmounts).reduce((sum, amount) => sum + (amount ?? 0), 0).toFixed(1));
+  const toppingWeight = Number(Object.values(toppingAmounts).reduce<number>((sum, amount) => sum + (amount ?? 0), 0).toFixed(1));
   const doughWeight = size;
   const base = { calories: 0, protein: 0, carbohydrates: 0, fat: 0, sugar: 0 };
   const nutrition = selected.reduce((total, option) => {

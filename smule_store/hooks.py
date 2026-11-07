@@ -9,6 +9,7 @@ app_license = "mit"
 required_apps = ["erpnext"]
 after_install = "smule_store.setup.install.after_install"
 after_migrate = "smule_store.setup.install.after_migrate"
+before_request = ["smule_store.utils.bootstrap.ensure_smule_module_map"]
 
 website_route_rules = [
 	{"from_route": "/", "to_route": "smule_storefront"},
@@ -58,6 +59,8 @@ website_route_rules = [
 # include js, css files in header of web template
 web_include_css = "/assets/smule_store/css/storefront-auth.css"
 # web_include_js = "/assets/smule_store/js/smule_store.js"
+
+doctype_js = {"Sales Order": "public/js/sales_order.js"}
 
 # include custom scss in every website theme (without file extension ".scss")
 # website_theme_scss = "smule_store/public/scss/website"
